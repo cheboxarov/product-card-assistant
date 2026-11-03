@@ -324,65 +324,43 @@
     blocks.replaceChildren();
     byId("result-time").textContent = `Готово за ${seconds} с`;
     byId("markdown").textContent = data.markdown;
-    bindCopy(byId("copy-markdown"), data.markdown);
+    bindCopy(byId("copy-markdown"), data.markdown, "Копировать всё (Markdown)");
 
     addBlock({
       title: "Заголовок",
       counter: counterOf(card.seo_title.length, `до ${TITLE_MAX}`, card.seo_title.length <= TITLE_MAX),
-      copyText: card.seo_title,
-      body: textBody(card.seo_title, "title-value"),
+      text: card.seo_title,
+      bodyClass: "title-value",
     });
     const length = card.seo_description.length;
     addBlock({
       title: "Описание",
       counter: counterOf(length, `${DESCRIPTION_MIN}-${DESCRIPTION_MAX}`, length >= DESCRIPTION_MIN && length <= DESCRIPTION_MAX),
-      copyText: card.seo_description,
-      body: textBody(card.seo_description),
+      text: card.seo_description,
     });
     addBlock({
       title: "Характеристики",
       copyText: card.characteristics.map((item) => `${item.name}: ${item.value}`).join("\n"),
       body: characteristicsTable(card.characteristics),
     });
-    addBlock({
-      title: "Поисковые запросы",
-      copyText: card.search_queries.join("\n"),
-      body: listOf(card.search_queries),
-    });
-    addBlock({
-      title: "Кому подходит",
-      copyText: card.commercial.audience,
-      body: textBody(card.commercial.audience),
-    });
-    addBlock({
-      title: "Какие задачи решает",
-      copyText: card.commercial.tasks,
-      body: textBody(card.commercial.tasks),
-    });
+    addBlock({ title: "Поисковые запросы", items: card.search_queries });
+    addBlock({ title: "Кому подходит", text: card.commercial.audience });
+    addBlock({ title: "Какие задачи решает", text: card.commercial.tasks });
 
     const clarify = [
       ...data.missing_fields.map((name) => `${name}: ${NO_DATA}`),
       ...data.needs_clarification.map((item) => `${item.field}: ${item.reason}`),
     ];
     if (clarify.length) {
-      addBlock({
-        title: "Что уточнить",
-        copyText: clarify.join("\n"),
-        body: listOf(clarify),
-      });
+      addBlock({ title: "Что уточнить", items: clarify });
     }
     if (data.warnings.length) {
-      addBlock({
-        title: "Предупреждения",
-        copyText: data.warnings.join("\n"),
-        body: listOf(data.warnings),
-        className: "warning",
-      });
+      addBlock({ title: "Предупреждения", items: data.warnings, className: "warning" });
     }
     result.hidden = false;
   }
 
-  function addBlock({ title, counter, copyText, body, className }) {
+  function addBlock({ title, counter, text, items, bodyClass, copyText, body, className }) {
     const block = document.createElement("div");
     block.className = className ? `block ${className}` : "block";
     const head = document.createElement("div");
@@ -396,9 +374,9 @@
     const copy = document.createElement("button");
     copy.type = "button";
     copy.className = "secondary copy";
-    bindCopy(copy, copyText);
+    bindCopy(copy, copyText ?? (items ? items.join("\n") : text), "Копировать");
     head.append(heading, copy);
-    block.append(head, body);
+    block.append(head, body ?? (items ? listOf(items) : textBody(text, bodyClass)));
     blocks.append(block);
   }
 
@@ -439,8 +417,7 @@
     return table;
   }
 
-  function bindCopy(button, text) {
-    const label = button.id === "copy-markdown" ? "Копировать всё (Markdown)" : "Копировать";
+  function bindCopy(button, text, label) {
     button.textContent = label;
     button.onclick = async () => {
       try {
