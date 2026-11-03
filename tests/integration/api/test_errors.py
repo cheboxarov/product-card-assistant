@@ -6,13 +6,13 @@ import logging
 from application.services.card_generation import service as service_module
 from domain.exceptions import LlmFailedError, LlmUnavailableError
 from domain.interfaces.infrastructure.llm_client import LlmRequest
-from tests.fakes import FakeLlmClient, card_texts_json
+from tests.fakes import FakeLlmClient, card_texts_json, review_json
 from tests.integration.api.conftest import CARDS_PATH, MANOMETER
 
 # Test cases:
 # 1. Временный сбой дважды: 503, два вызова, одна строка лога без текста промпта
 # 2. Постоянный сбой: 502, один вызов, одна строка лога
-# 3. Временный сбой, затем успех: 200, два вызова, лога нет
+# 3. Временный сбой, затем успех: 200, повторён только сбойный вызов, лога нет
 # 4. Ответ не прошёл схему дважды: 502, два вызова
 # 5. Ответ не прошёл схему, затем успех: 200
 # 6. Граф не уложился в общий таймаут: 503
@@ -64,11 +64,12 @@ async def test_case_2(api_client_for, caplog) -> None:
 
 
 async def test_case_3(api_client_for, caplog) -> None:
-    # 3. Временный сбой, затем успех: 200, два вызова, лога нет
+    # 3. Временный сбой, затем успех: 200, повторён только сбойный вызов, лога нет
     # Arrange
     llm = FakeLlmClient(
         LlmUnavailableError("OpenRouter ответил 429", retryable=True),
         card_texts_json(),
+        review_json(),
     )
     client = api_client_for(llm)
 
@@ -77,7 +78,7 @@ async def test_case_3(api_client_for, caplog) -> None:
 
     # Assert
     assert response.status_code == 200
-    assert len(llm.requests) == 2
+    assert len(llm.requests) == 3
     assert failures(caplog) == []
 
 
@@ -98,7 +99,7 @@ async def test_case_4(api_client_for) -> None:
 async def test_case_5(api_client_for) -> None:
     # 5. Ответ не прошёл схему, затем успех: 200
     # Arrange
-    llm = FakeLlmClient("не json", card_texts_json())
+    llm = FakeLlmClient("не json", card_texts_json(), review_json())
     client = api_client_for(llm)
 
     # Act
@@ -106,7 +107,7 @@ async def test_case_5(api_client_for) -> None:
 
     # Assert
     assert response.status_code == 200
-    assert len(llm.requests) == 2
+    assert len(llm.requests) == 3
 
 
 async def test_case_6(api_client_for, monkeypatch) -> None:

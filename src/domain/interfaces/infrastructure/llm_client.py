@@ -10,6 +10,7 @@ class LlmRequest:
     user: str
     schema_name: str
     json_schema: dict[str, Any]
+    reasoning_effort: str | None
 
 
 class LlmClient(Protocol):

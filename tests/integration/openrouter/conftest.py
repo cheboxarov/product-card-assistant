@@ -16,6 +16,7 @@ LLM_REQUEST = LlmRequest(
     user=PROMPT_TEXT,
     schema_name="card_texts",
     json_schema={"type": "object"},
+    reasoning_effort=None,
 )
 
 

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+from application.services.card_generation.llm_schemas import WriteCardOutput
+from application.services.card_generation.prompts.rules import render_device
 from domain.entities.product import Product
 
 SYSTEM = (
@@ -10,20 +12,25 @@ SYSTEM = (
 )
 
 
-def build_user_message(product: Product) -> str:
-    product_json = json.dumps(
-        {
-            "name": product.name,
-            "manufacturer": product.manufacturer,
-            "specs": dict(product.specs),
-            "description": product.description,
-        },
-        ensure_ascii=False,
-    )
-    return (
-        f"Вход: {product_json}\n"
-        "seo_title: SEO-заголовок до 70 символов\n"
-        "seo_description: связный текст на русском, примерно 130-160 слов\n"
-        "search_queries: 3-5 поисковых запросов\n"
-        "commercial: audience (кому подходит), tasks (какие задачи решает)"
-    )
+def build_first_message(product: Product) -> str:
+    return f"{render_device(product)}\n\nЗаполни все поля ответа."
+
+
+def build_revision_message(
+    product: Product,
+    previous: WriteCardOutput,
+    remarks: list[str],
+) -> str:
+    previous_json = json.dumps(previous.model_dump(), ensure_ascii=False, indent=1)
+    lines = "\n".join(f"- {remark}" for remark in remarks)
+    return f"""{render_device(product)}
+
+<previous_answer>
+{previous_json}
+</previous_answer>
+
+<remarks>
+{lines}
+</remarks>
+
+Выше твой прошлый ответ и замечания к нему. Верни ответ целиком в той же схеме."""

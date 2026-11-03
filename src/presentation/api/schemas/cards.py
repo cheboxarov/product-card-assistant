@@ -6,6 +6,7 @@ from pydantic import BaseModel, StrictFloat, StrictInt, StrictStr, StringConstra
 
 from domain.entities.card import CardDraft
 from domain.entities.product import Product
+from presentation.api.markdown import render_markdown
 
 SpecName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 SpecValue = StrictStr | StrictInt | StrictFloat | None
@@ -54,22 +55,23 @@ class CardResponse(BaseModel):
     missing_fields: list[str]
     needs_clarification: list[ClarificationResponse]
     warnings: list[str]
+    markdown: str
 
     @classmethod
     def from_draft(cls, draft: CardDraft) -> CardResponse:
-        card = draft.card
+        texts = draft.card.texts
         return cls(
             card=CardBodyResponse(
-                seo_title=card.seo_title,
-                seo_description=card.seo_description,
+                seo_title=texts.seo_title,
+                seo_description=texts.seo_description,
                 characteristics=[
                     CharacteristicResponse(name=item.name, value=item.value)
-                    for item in card.characteristics
+                    for item in draft.card.characteristics
                 ],
-                search_queries=list(card.search_queries),
+                search_queries=list(texts.search_queries),
                 commercial=CommercialResponse(
-                    audience=card.commercial.audience,
-                    tasks=card.commercial.tasks,
+                    audience=texts.commercial.audience,
+                    tasks=texts.commercial.tasks,
                 ),
             ),
             missing_fields=list(draft.missing_fields),
@@ -78,6 +80,7 @@ class CardResponse(BaseModel):
                 for item in draft.needs_clarification
             ],
             warnings=list(draft.warnings),
+            markdown=render_markdown(draft),
         )
 
 
