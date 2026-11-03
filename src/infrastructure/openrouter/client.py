@@ -40,6 +40,7 @@ class OpenRouterClient(LlmClient):
                         },
                     },
                     max_tokens=MAX_OUTPUT_TOKENS,
+                    extra_body=_reasoning_body(request.reasoning_effort),
                 )
         except TimeoutError as exc:
             raise LlmUnavailableError(
@@ -59,6 +60,12 @@ class OpenRouterClient(LlmClient):
                 retryable=True,
             ) from exc
         return _extract_json(response)
+
+
+def _reasoning_body(effort: str | None) -> dict[str, dict[str, str]] | None:
+    if effort is None:
+        return None
+    return {"reasoning": {"effort": effort}}
 
 
 def _extract_json(response: object) -> str:

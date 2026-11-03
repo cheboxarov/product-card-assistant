@@ -4,15 +4,27 @@ import json
 
 from domain.interfaces.infrastructure.llm_client import LlmClient, LlmRequest
 
+CLEAN_DESCRIPTION = (
+    "Манометр показывает избыточное давление, это помогает следить за режимом работы. "
+    * 11
+).strip()
+
 
 def card_texts_json(**overrides: object) -> str:
-    texts: dict[str, object] = {
-        "seo_title": "Манометр DM 02 Манотомь 0–1,6 МПа",
-        "seo_description": "Манометр DM 02 показывает избыточное давление.",
-        "search_queries": ["манометр DM 02", "манометр Манотомь", "манометр 1,6 МПа"],
+    answer: dict[str, object] = {
+        "description_facts": [],
+        "missing_characteristics": [],
+        "needs_clarification": [],
+        "seo_title": "Манометр показывающий Манотомь",
+        "seo_description": CLEAN_DESCRIPTION,
+        "search_queries": ["манометр купить", "манометр манотомь", "манометр давление"],
         "commercial": {"audience": "служба КИПиА", "tasks": "контроль давления"},
     }
-    return json.dumps({**texts, **overrides}, ensure_ascii=False)
+    return json.dumps({**answer, **overrides}, ensure_ascii=False)
+
+
+def review_json(*issues: dict[str, str]) -> str:
+    return json.dumps({"issues": list(issues)}, ensure_ascii=False)
 
 
 class FakeLlmClient(LlmClient):

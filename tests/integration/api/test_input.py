@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.fakes import FakeLlmClient, card_texts_json
+from tests.fakes import FakeLlmClient, card_texts_json, review_json
 from tests.integration.api.conftest import CARDS_PATH, MANOMETER
 
 # Test cases:
@@ -139,7 +139,7 @@ async def test_case_4(api_client_for, payload, missing) -> None:
 async def test_case_5(api_client_for, payload, missing) -> None:
     # 5. Хватает данных, часть пустая: 200, в missing_fields подписи пустых
     # Arrange
-    llm = FakeLlmClient(card_texts_json())
+    llm = FakeLlmClient(card_texts_json(), review_json())
     client = api_client_for(llm)
 
     # Act
@@ -148,13 +148,13 @@ async def test_case_5(api_client_for, payload, missing) -> None:
     # Assert
     assert response.status_code == 200
     assert response.json()["missing_fields"] == missing
-    assert len(llm.requests) == 1
+    assert len(llm.requests) == 2
 
 
 async def test_case_6(api_client_for) -> None:
     # 6. Пустое значение в specs: «данных нет» в списке и название в missing_fields
     # Arrange
-    client = api_client_for(FakeLlmClient(card_texts_json()))
+    client = api_client_for(FakeLlmClient(card_texts_json(), review_json()))
     payload = {**MANOMETER, "specs": {"Класс точности": "1,5", "Защита": None}}
 
     # Act
