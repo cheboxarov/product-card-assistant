@@ -32,12 +32,14 @@ from domain.entities.product import Product
 # 17. Сборка: значения specs как во входе и по порядку, затем факты, затем отсутствующие
 # 18. Сборка: specs главнее факта, дубли убираются по нормализованному имени
 # 19. Сборка: отброшенный факт даёт warning, значения в списке нет
-# 20. Сборка: факт с именем из specs не проверяется и не даёт warning
+# 20. Сборка: факт с именем из заполненной строки specs не проверяется и не даёт warning
 # 21. Сборка: пустые имена пропускаются, дубли внутри specs остаются как во входе
 # 22. Цитата ищется с границами: слева и справа не буква, не цифра и не обрывок числа
 # 23. «Не» или «без» сразу перед цитатой в описании и нет в значении: факт отброшен
 # 24. «Без» внутри цитаты не теряется, как и «не»
 # 25. Значение без букв и цифр: факт отброшен
+# 26. Сборка: подтверждённый факт встаёт на место пустой строки specs, порядок прежний, второй строки нет
+# 27. Сборка: неподтверждённый факт с именем пустой строки specs даёт warning, строка остаётся пустой
 
 
 PRODUCT = Product(
@@ -497,18 +499,18 @@ def test_case_19() -> None:
 
 
 def test_case_20() -> None:
-    # 20. Сборка: факт с именем из specs не проверяется и не даёт warning
+    # 20. Сборка: факт с именем из заполненной строки specs не проверяется и не даёт warning
     # Act
     result = assemble_characteristics(
         PRODUCT,
-        facts=[fact("IP68", "IP68", name="Защита")],
+        facts=[fact("IP68", "IP68", name="Диапазон")],
         missing_names=[],
     )
 
     # Assert
     assert result.warnings == ()
-    assert result.characteristics[2] == Characteristic(
-        name="Защита", value="данных нет"
+    assert result.characteristics[0] == Characteristic(
+        name="Диапазон", value="0–1,6 МПа"
     )
 
 
@@ -628,3 +630,48 @@ def test_case_25(value) -> None:
 
     # Assert
     assert result is False
+
+
+def test_case_26() -> None:
+    # 26. Сборка: подтверждённый факт встаёт на место пустой строки specs, порядок прежний, второй строки нет
+    # Arrange
+    product = Product(
+        name="Манометр",
+        manufacturer=None,
+        specs={"Класс точности": None, "Диаметр": 100, "Защита": "  "},
+        description="Класс точности 1,5",
+    )
+
+    # Act
+    result = assemble_characteristics(
+        product,
+        facts=[fact("1,5", "Класс точности 1,5", name="класс  ТОЧНОСТИ")],
+        missing_names=["Класс точности", "Защита"],
+    )
+
+    # Assert
+    assert result.characteristics == (
+        Characteristic(name="Класс точности", value="1,5"),
+        Characteristic(name="Диаметр", value="100"),
+        Characteristic(name="Защита", value="данных нет"),
+    )
+    assert result.added_missing == ()
+    assert result.warnings == ()
+
+
+def test_case_27() -> None:
+    # 27. Сборка: неподтверждённый факт с именем пустой строки specs даёт warning, строка остаётся пустой
+    # Act
+    result = assemble_characteristics(
+        PRODUCT,
+        facts=[fact("IP68", "IP68", name="Защита")],
+        missing_names=[],
+    )
+
+    # Assert
+    assert result.characteristics[2] == Characteristic(
+        name="Защита", value="данных нет"
+    )
+    assert result.warnings == (
+        "Характеристика «Защита» не добавлена: значение не подтверждено описанием прибора, проверьте вручную.",
+    )

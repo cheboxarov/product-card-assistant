@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections.abc import Iterable, Mapping
+from dataclasses import replace
 from decimal import Decimal
 
 from domain.entities.card import (
@@ -78,6 +79,18 @@ def find_missing_input(product: Product) -> tuple[str, ...]:
     return tuple(missing)
 
 
+def filled_spec_names(
+    product: Product,
+    characteristics: Iterable[Characteristic],
+) -> set[str]:
+    filled = {item.name for item in characteristics if item.value != NO_DATA}
+    return {
+        name
+        for name, value in product.specs.items()
+        if is_empty(value) and name in filled
+    }
+
+
 def has_too_little_data(product: Product) -> bool:
     has_specs = any(not is_empty(value) for value in product.specs.values())
     return is_empty(product.name) or (not has_specs and is_empty(product.description))
@@ -141,7 +154,14 @@ def assemble_characteristics(
     missing_names: Iterable[str],
 ) -> AssembledCharacteristics:
     characteristics = list(_characteristics_from_specs(product.specs))
-    seen = {_normalize(item.name) for item in characteristics}
+    seen = {
+        _normalize(name) for name, value in product.specs.items() if not is_empty(value)
+    }
+    empty_rows = {
+        _normalize(name): row
+        for row, (name, value) in enumerate(product.specs.items())
+        if is_empty(value)
+    }
     warnings: list[str] = []
     for fact in facts:
         key = _normalize(fact.name)
@@ -150,8 +170,13 @@ def assemble_characteristics(
         if not is_fact_supported(fact, product.description or ""):
             warnings.append(FACT_DROPPED_WARNING.format(name=fact.name))
             continue
-        characteristics.append(Characteristic(name=fact.name, value=fact.value))
+        if key in empty_rows:
+            row = empty_rows[key]
+            characteristics[row] = replace(characteristics[row], value=fact.value)
+        else:
+            characteristics.append(Characteristic(name=fact.name, value=fact.value))
         seen.add(key)
+    seen.update(empty_rows)
     added_missing: list[str] = []
     for name in missing_names:
         key = _normalize(name)

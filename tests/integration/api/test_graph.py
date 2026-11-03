@@ -28,6 +28,7 @@ from tests.integration.api.conftest import CARDS_PATH, MANOMETER
 # 19. missing_fields: сначала пустые поля входа, затем названия от модели, дублей нет
 # 20. Значение из description попадает в список, а specs главнее
 # 21. Пустые specs и manufacturer не доходят до модели ни в написании, ни в ревью, ни в правке
+# 22. Подтверждённый факт заполняет пустую строку specs и убирает имя из missing_fields
 
 
 def filler_issue(quote: str = "контроль давления") -> dict[str, str]:
@@ -597,3 +598,41 @@ async def test_case_21(api_client_for) -> None:
         assert "Другая" not in request.user
     assert "Пустая" in response.json()["missing_fields"]
     assert CLEAN_DESCRIPTION == response.json()["card"]["seo_description"]
+
+
+async def test_case_22(api_client_for) -> None:
+    # 22. Подтверждённый факт заполняет пустую строку specs и убирает имя из missing_fields
+    # Arrange
+    llm = FakeLlmClient(
+        card_texts_json(
+            description_facts=[
+                {
+                    "name": "Класс точности",
+                    "value": "1,5",
+                    "quote": "Класс точности 1,5",
+                }
+            ],
+            missing_characteristics=["Класс точности"],
+        ),
+        review_json(),
+    )
+    client = api_client_for(llm)
+    payload = {
+        "name": "Манометр",
+        "manufacturer": "Манотомь",
+        "specs": {"Класс точности": None, "Диаметр": "100 мм", "Защита": None},
+        "description": "Класс точности 1,5",
+    }
+
+    # Act
+    response = await client.post(CARDS_PATH, json=payload)
+
+    # Assert
+    body = response.json()
+    assert body["card"]["characteristics"] == [
+        {"name": "Класс точности", "value": "1,5"},
+        {"name": "Диаметр", "value": "100 мм"},
+        {"name": "Защита", "value": "данных нет"},
+    ]
+    assert body["missing_fields"] == ["Защита"]
+    assert body["warnings"] == []
