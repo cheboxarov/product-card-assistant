@@ -42,8 +42,11 @@ from domain.entities.product import Product
 # 27. Сборка: неподтверждённый факт с именем пустой строки specs даёт warning, строка остаётся пустой
 # 28. Числа со знаком в текстах: минус вплотную к числу часть числа, слово «минус» то же, плюс равен отсутствию знака
 # 29. Число без знака и с минусом это разные числа, вид минуса не важен
-# 30. Минус после цифры, буквы, разделителя или с пробелом это не знак
+# 30. Минус после цифры, буквы, единицы, закрывающего знака, разделителя или с пробелом это не знак
 # 31. Числа факта сравниваются со знаком, цитата без минуса из описания не проходит
+# 32. Минус после многоточия это знак: тексты и факты с диапазоном из двух отрицательных чисел
+# 33. Плюс-минус в любом написании это два числа, x и -x
+# 34. Плюс-минус вплотную к числу не теряет ни одного из чисел, лишний знак даёт замечание
 
 
 PRODUCT = Product(
@@ -742,14 +745,21 @@ def test_case_29(minus) -> None:
         ("DM-02", "DM 02"),
         ("0–1,6 МПа", "0 и 1,6 МПа"),
         ("84,0...106,7 кПа", "84 и 106,7 кПа"),
-        ("–40…–20 °С", "-40 и 20 °С"),
-        ("–40...–20 °С", "-40 и 20 °С"),
         ("1,-5", "1 и 5"),
         ("1.-5", "1 и 5"),
+        ("30 %–80 %", "30 и 80 %"),
+        ("10%-90%", "10 и 90 %"),
+        ("G½″-14", "G 1/2 и 14"),
+        ("G1′-14", "G 1 и 14"),
+        ('G1/2"-14', "G 1/2 и 14"),
+        ("(0)-10", "0 и 10"),
+        ("[0]-10", "0 и 10"),
+        ("-40°-85°", "-40 и 85"),
+        ("«DM»-100", "DM 100"),
     ],
 )
 def test_case_30(source, text) -> None:
-    # 30. Минус после цифры, буквы, разделителя или с пробелом это не знак
+    # 30. Минус после цифры, буквы, единицы, закрывающего знака, разделителя или с пробелом это не знак
     # Arrange
     product = Product(
         name="Прибор", manufacturer=None, specs={"П": source}, description=None
@@ -778,3 +788,88 @@ def test_case_31(value, quote, supported) -> None:
 
     # Assert
     assert result is supported
+
+
+@pytest.mark.parametrize("source", ["–40…–20 °С", "–40...–20 °С", "–40..–20 °С"])
+def test_case_32(source) -> None:
+    # 32. Минус после многоточия это знак: тексты и факты с диапазоном из двух отрицательных чисел
+    # Arrange
+    product = Product(
+        name="Прибор", manufacturer=None, specs={"П": source}, description=None
+    )
+    description = f"Хранение {source}."
+
+    # Act
+    right = find_card_issues(product, texts_with(seo_title="От -40 до -20 °С"))
+    wrong = find_card_issues(product, texts_with(seo_title="От -40 до 20 °С"))
+
+    # Assert
+    assert right == ()
+    assert [issue.remark for issue in wrong] == [
+        "Число 20 в поле seo_title не встречается в данных о приборе. Убери его."
+    ]
+    assert is_fact_supported(fact("–20 °С", "–20 °С"), description) is True
+    assert is_fact_supported(fact("20 °С", "20 °С"), description) is False
+
+
+@pytest.mark.parametrize(
+    "spelling",
+    [
+        "±0,5",
+        "± 0,5",
+        "+/-0,5",
+        "+/- 0,5",
+        "+/−0,5",
+        "+-0,5",
+        "+–0,5",
+        "плюс-минус 0,5",
+        "Плюс-минус 0,5",
+        "плюс–минус 0,5",
+        "плюс минус 0,5",
+        "плюс/минус 0,5",
+    ],
+)
+@pytest.mark.parametrize(
+    "text",
+    ["±0,5 %", "+/-0,5 %", "плюс-минус 0,5 %", "от –0,5 до +0,5 %", "0,5 %", "-0,5 %"],
+)
+def test_case_33(spelling, text) -> None:
+    # 33. Плюс-минус в любом написании это два числа, x и -x
+    # Arrange
+    product = Product(
+        name="Прибор", manufacturer=None, specs={"П": f"{spelling} %"}, description=None
+    )
+
+    # Act
+    issues = find_card_issues(product, texts_with(seo_title=text))
+    reverse = find_card_issues(
+        Product(
+            name="Прибор", manufacturer=None, specs={"П": "–0,5…+0,5"}, description=None
+        ),
+        texts_with(seo_title=f"Прибор {spelling}"),
+    )
+
+    # Assert
+    assert issues == ()
+    assert reverse == ()
+
+
+def test_case_34() -> None:
+    # 34. Плюс-минус вплотную к числу не теряет ни одного из чисел, лишний знак даёт замечание
+    # Arrange
+    product = Product(
+        name="Прибор", manufacturer=None, specs={"П": "10±0,5"}, description=None
+    )
+    unsigned = Product(
+        name="Прибор", manufacturer=None, specs={"П": "0,5 %"}, description=None
+    )
+
+    # Act
+    issues = find_card_issues(product, texts_with(seo_title="10, -0,5 и 0,5"))
+    extra = find_card_issues(unsigned, texts_with(seo_title="±0,5 %"))
+
+    # Assert
+    assert issues == ()
+    assert [issue.remark for issue in extra] == [
+        "Число -0,5 в поле seo_title не встречается в данных о приборе. Убери его."
+    ]

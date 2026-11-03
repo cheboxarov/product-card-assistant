@@ -25,6 +25,7 @@ from tests.integration.openrouter.conftest import (
 # 8. В причине нет ключа и текста промпта, при 400 есть metadata.raw
 # 9. finish_reason error с choices[0].error: класс сбоя по error.code, как у статусов
 # 10. Кривой ответ при HTTP 200: негодный ответ, повторяемый
+# 11. finish_reason null или нет при непустом контенте: негодный ответ, повторяемый
 
 
 async def failure_of(client) -> Exception:
@@ -261,6 +262,27 @@ async def test_case_10(client_for, response) -> None:
     # 10. Кривой ответ при HTTP 200: негодный ответ, повторяемый
     # Arrange
     client = client_for(lambda _: response)
+
+    # Act
+    error = await failure_of(client)
+
+    # Assert
+    assert isinstance(error, LlmFailedError)
+    assert error.retryable is True
+
+
+@pytest.mark.parametrize(
+    "choice",
+    [
+        {"finish_reason": None, "message": {"role": "assistant", "content": "{}"}},
+        {"message": {"role": "assistant", "content": "{}"}},
+    ],
+)
+async def test_case_11(client_for, choice) -> None:
+    # 11. finish_reason null или нет при непустом контенте: негодный ответ, повторяемый
+    # Arrange
+    body = {**completion_body("{}"), "choices": [choice]}
+    client = client_for(lambda _: httpx2.Response(200, json=body))
 
     # Act
     error = await failure_of(client)
