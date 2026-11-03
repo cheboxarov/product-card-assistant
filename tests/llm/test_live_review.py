@@ -8,7 +8,6 @@ from dataclasses import dataclass
 import pytest
 
 from application.services.card_generation.llm_schemas import (
-    CommercialOutput,
     ReviewCardOutput,
     WriteCardOutput,
 )
@@ -99,7 +98,7 @@ def draft_of(case: dict) -> WriteCardOutput:
         seo_title=card["seo_title"],
         seo_description=card["seo_description"],
         search_queries=card["search_queries"],
-        commercial=CommercialOutput(**card["commercial"]),
+        commercial=Commercial(**card["commercial"]),
     )
 
 
