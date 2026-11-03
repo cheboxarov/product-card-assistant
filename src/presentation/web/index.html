@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Карточка товара КИП</title>
+<style>
+  :root {
+    --text: #1c2430;
+    --muted: #5f6b7a;
+    --line: #d9dfe6;
+    --surface: #ffffff;
+    --page: #f4f6f8;
+    --accent: #1f5fbf;
+    --accent-dark: #174a96;
+    --warn-bg: #fff6e0;
+    --warn-line: #e6c15a;
+    --error-bg: #fdecec;
+    --error-line: #dc8a8a;
+    --bad: #b3261e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { margin: 0 0 4px; font-size: 24px; }
+  h2 { margin: 0; font-size: 15px; font-weight: 600; }
+  .lead { margin: 0 0 20px; color: var(--muted); }
+  .panel, .block {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .row.spread { justify-content: space-between; }
+  .tabs { margin-bottom: 16px; border-bottom: 1px solid var(--line); }
+  .tab {
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: none;
+    padding: 8px 12px;
+    font: inherit;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .tab[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+  label { display: block; margin-bottom: 12px; font-size: 14px; font-weight: 600; }
+  .hint { font-weight: 400; color: var(--muted); }
+  input, textarea {
+    display: block;
+    width: 100%;
+    margin-top: 4px;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--text);
+    font: 15px/1.45 inherit;
+    font-family: inherit;
+  }
+  textarea { resize: vertical; }
+  #json-input { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
+  button.primary, button.secondary {
+    border-radius: 6px;
+    padding: 8px 14px;
+    font: inherit;
+    cursor: pointer;
+  }
+  button.primary { border: 1px solid var(--accent); background: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover { background: var(--accent-dark); }
+  button.primary:disabled { opacity: .6; cursor: wait; }
+  button.secondary { border: 1px solid var(--line); background: #fff; color: var(--text); }
+  button.secondary:hover { border-color: var(--accent); color: var(--accent); }
+  button.copy { padding: 3px 10px; font-size: 13px; }
+  .examples { margin-bottom: 16px; }
+  .examples span { font-size: 14px; color: var(--muted); }
+  .status { color: var(--muted); }
+  .message { border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; border: 1px solid; }
+  .message.error { background: var(--error-bg); border-color: var(--error-line); }
+  .message p { margin: 0; }
+  .message ul { margin: 8px 0 0; padding-left: 20px; }
+  .block-head { margin-bottom: 8px; }
+  .block-title { display: flex; align-items: baseline; gap: 10px; }
+  .counter { font-size: 13px; color: var(--muted); }
+  .counter.bad { color: var(--bad); font-weight: 600; }
+  .value { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .title-value { font-size: 18px; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  td { padding: 6px 8px; border-top: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+  tr:first-child td { border-top: 0; }
+  td:first-child { width: 45%; color: var(--muted); }
+  td.no-data { color: var(--bad); }
+  ul.items { margin: 0; padding-left: 20px; }
+  .block.warning { background: var(--warn-bg); border-color: var(--warn-line); }
+  details { margin-top: 10px; }
+  summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+  pre {
+    margin: 8px 0 0;
+    padding: 10px;
+    background: var(--page);
+    border-radius: 6px;
+    font-size: 13px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Карточка товара КИП</h1>
+  <p class="lead">Черновик карточки по данным о приборе. Значения характеристик берутся только из входа.</p>
+
+  <section class="panel">
+    <div class="row examples">
+      <span>Примеры:</span>
+      <button type="button" class="secondary" data-example="manometer">Манометр</button>
+      <button type="button" class="secondary" data-example="pd100">ПД100</button>
+    </div>
+
+    <div class="row tabs" role="tablist">
+      <button type="button" class="tab" role="tab" id="tab-form" aria-selected="true" aria-controls="pane-form">Форма</button>
+      <button type="button" class="tab" role="tab" id="tab-json" aria-selected="false" aria-controls="pane-json">JSON</button>
+    </div>
+
+    <form id="card-form" novalidate>
+      <div id="pane-form" role="tabpanel" aria-labelledby="tab-form">
+        <label>Название
+          <input id="field-name" type="text" autocomplete="off">
+        </label>
+        <label>Производитель
+          <input id="field-manufacturer" type="text" autocomplete="off">
+        </label>
+        <label>Характеристики <span class="hint">по одной в строке, «имя: значение»</span>
+          <textarea id="field-specs" rows="7" placeholder="Диапазон измерений: 0–1,6 МПа"></textarea>
+        </label>
+        <label>Описание
+          <textarea id="field-description" rows="5"></textarea>
+        </label>
+      </div>
+      <div id="pane-json" role="tabpanel" aria-labelledby="tab-json" hidden>
+        <label>JSON прибора <span class="hint">уходит на сервер как есть</span>
+          <textarea id="json-input" rows="16" spellcheck="false" placeholder='{"name": "...", "manufacturer": "...", "specs": {"имя": "значение"}, "description": "..."}'></textarea>
+        </label>
+      </div>
+      <div class="row">
+        <button type="submit" class="primary" id="submit">Сделать карточку</button>
+        <span class="status" id="status" role="status"></span>
+      </div>
+    </form>
+  </section>
+
+  <div class="message error" id="error" role="alert" hidden></div>
+
+  <section id="result" hidden>
+    <div class="row spread panel">
+      <strong id="result-time"></strong>
+      <button type="button" class="secondary copy" id="copy-markdown">Копировать всё (Markdown)</button>
+    </div>
+    <div id="blocks"></div>
+    <details class="panel">
+      <summary>Markdown целиком</summary>
+      <pre id="markdown"></pre>
+    </details>
+  </section>
+</main>
+
+<script>
+  const EXAMPLES = {
+    "manometer": {
+      "name": "Манометр показывающий DM 02",
+      "manufacturer": "Манотомь",
+      "specs": {
+        "Диапазон измерений": "0–1,6 МПа",
+        "Класс точности": "1,5",
+        "Присоединение": "G1/2",
+        "Диаметр корпуса": "100 мм"
+      },
+      "description": "Прибор предназначен для измерения избыточного давления неагрессивных к медным сплавам жидкостей и газов."
+    },
+    "pd100": {
+      "name": "Преобразователь давления измерительный ПД100-1Х1",
+      "manufacturer": "ОВЕН",
+      "specs": {
+        "Тип": "Двухпроводная токовая петля 4–20 мА",
+        "Напряжение питания постоянного тока": "12…36 В (номинальное значение – 24 В)",
+        "Потребляемая мощность, не более": "0,8 Вт",
+        "Верхний предел измерения": "0,016…100,0 МПа",
+        "Предельное давление перегрузки, не менее": "200 % от ВПИ",
+        "Тип выходного сигнала": "4–20 мА постоянного тока",
+        "Штуцер для подключения к процессу": "М20×1,5; G½″; G¼″",
+        "Тип электрического соединителя": "EN175301-803 форма А (DIN43650A)",
+        "Степень защиты корпуса": "IP65",
+        "Температура измеряемой среды": "–40…+100 °С",
+        "Температура окружающего воздуха": "–20…+70 °С",
+        "Атмосферное давление": "84,0...106,7 кПа"
+      },
+      "description": "Преобразователь давления измерительный ПД100-1Х1 предназначен для непрерывного преобразования давления измеряемой среды в унифицированный электрический сигнал постоянного тока 4–20 мА. Область применения преобразователя – системы контроля, автоматического регулирования и учета в различных отраслях промышленности. Рабочая среда для преобразователя – газы, пароводяные смеси и жидкости (в т. ч. техническая вода) при давлении, не превышающем верхний предел измерения преобразователя (ВПИ)."
+    }
+  };
+  const CARDS_URL = "/api/v1/cards";
+  const NO_DATA = "данных нет";
+  const TITLE_MAX = 70;
+  const DESCRIPTION_MIN = 800;
+  const DESCRIPTION_MAX = 1200;
+  const COPIED_LABEL_MS = 1500;
+
+  const byId = (id) => document.getElementById(id);
+  const form = byId("card-form");
+  const submit = byId("submit");
+  const statusLine = byId("status");
+  const errorBox = byId("error");
+  const result = byId("result");
+  const blocks = byId("blocks");
+  let activeTab = "form";
+
+  function selectTab(tab) {
+    activeTab = tab;
+    byId("tab-form").setAttribute("aria-selected", String(tab === "form"));
+    byId("tab-json").setAttribute("aria-selected", String(tab === "json"));
+    byId("pane-form").hidden = tab !== "form";
+    byId("pane-json").hidden = tab !== "json";
+  }
+
+  byId("tab-form").addEventListener("click", () => selectTab("form"));
+  byId("tab-json").addEventListener("click", () => selectTab("json"));
+
+  document.querySelectorAll("[data-example]").forEach((button) => {
+    button.addEventListener("click", () => fillExample(EXAMPLES[button.dataset.example]));
+  });
+
+  function fillExample(device) {
+    byId("field-name").value = device.name;
+    byId("field-manufacturer").value = device.manufacturer;
+    byId("field-specs").value = Object.entries(device.specs)
+      .map(([name, value]) => `${name}: ${value}`)
+      .join("\n");
+    byId("field-description").value = device.description;
+    byId("json-input").value = JSON.stringify(device, null, 2);
+  }
+
+  function parseSpecs(text) {
+    const specs = {};
+    for (const line of text.split("\n")) {
+      if (!line.trim()) continue;
+      const colon = line.indexOf(":");
+      if (colon === -1) {
+        specs[line.trim()] = null;
+      } else {
+        specs[line.slice(0, colon).trim()] = line.slice(colon + 1).trim();
+      }
+    }
+    return specs;
+  }
+
+  function requestBody() {
+    if (activeTab === "json") return byId("json-input").value;
+    return JSON.stringify({
+      name: byId("field-name").value,
+      manufacturer: byId("field-manufacturer").value,
+      specs: parseSpecs(byId("field-specs").value),
+      description: byId("field-description").value,
+    });
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const started = Date.now();
+    const elapsed = () => Math.round((Date.now() - started) / 1000);
+    const showWait = () => {
+      statusLine.textContent = `Идёт генерация: ${elapsed()} с. Обычно около 100 с, бывает до 3 минут.`;
+    };
+    submit.disabled = true;
+    errorBox.hidden = true;
+    result.hidden = true;
+    showWait();
+    const timer = setInterval(showWait, 1000);
+    try {
+      const response = await fetch(CARDS_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: requestBody(),
+      });
+      const data = await response.json().catch(() => null);
+      if (response.ok && data) {
+        renderCard(data, elapsed());
+      } else {
+        renderError(data, response.status);
+      }
+    } catch (error) {
+      renderError({ detail: `Сервис не ответил: ${error.message}` });
+    } finally {
+      clearInterval(timer);
+      statusLine.textContent = "";
+      submit.disabled = false;
+    }
+  });
+
+  function renderError(data, status) {
+    errorBox.replaceChildren();
+    const text = document.createElement("p");
+    text.textContent = data && data.detail ? data.detail : `Ошибка сервиса, код ${status}`;
+    errorBox.append(text);
+    if (data && data.missing_fields && data.missing_fields.length) {
+      errorBox.append(listOf(data.missing_fields));
+    }
+    errorBox.hidden = false;
+  }
+
+  function renderCard(data, seconds) {
+    const { card } = data;
+    blocks.replaceChildren();
+    byId("result-time").textContent = `Готово за ${seconds} с`;
+    byId("markdown").textContent = data.markdown;
+    bindCopy(byId("copy-markdown"), data.markdown);
+
+    addBlock({
+      title: "Заголовок",
+      counter: counterOf(card.seo_title.length, `до ${TITLE_MAX}`, card.seo_title.length <= TITLE_MAX),
+      copyText: card.seo_title,
+      body: textBody(card.seo_title, "title-value"),
+    });
+    const length = card.seo_description.length;
+    addBlock({
+      title: "Описание",
+      counter: counterOf(length, `${DESCRIPTION_MIN}-${DESCRIPTION_MAX}`, length >= DESCRIPTION_MIN && length <= DESCRIPTION_MAX),
+      copyText: card.seo_description,
+      body: textBody(card.seo_description),
+    });
+    addBlock({
+      title: "Характеристики",
+      copyText: card.characteristics.map((item) => `${item.name}: ${item.value}`).join("\n"),
+      body: characteristicsTable(card.characteristics),
+    });
+    addBlock({
+      title: "Поисковые запросы",
+      copyText: card.search_queries.join("\n"),
+      body: listOf(card.search_queries),
+    });
+    addBlock({
+      title: "Кому подходит",
+      copyText: card.commercial.audience,
+      body: textBody(card.commercial.audience),
+    });
+    addBlock({
+      title: "Какие задачи решает",
+      copyText: card.commercial.tasks,
+      body: textBody(card.commercial.tasks),
+    });
+
+    const clarify = [
+      ...data.missing_fields.map((name) => `${name}: ${NO_DATA}`),
+      ...data.needs_clarification.map((item) => `${item.field}: ${item.reason}`),
+    ];
+    if (clarify.length) {
+      addBlock({
+        title: "Что уточнить",
+        copyText: clarify.join("\n"),
+        body: listOf(clarify),
+      });
+    }
+    if (data.warnings.length) {
+      addBlock({
+        title: "Предупреждения",
+        copyText: data.warnings.join("\n"),
+        body: listOf(data.warnings),
+        className: "warning",
+      });
+    }
+    result.hidden = false;
+  }
+
+  function addBlock({ title, counter, copyText, body, className }) {
+    const block = document.createElement("div");
+    block.className = className ? `block ${className}` : "block";
+    const head = document.createElement("div");
+    head.className = "row spread block-head";
+    const heading = document.createElement("div");
+    heading.className = "block-title";
+    const name = document.createElement("h2");
+    name.textContent = title;
+    heading.append(name);
+    if (counter) heading.append(counter);
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.className = "secondary copy";
+    bindCopy(copy, copyText);
+    head.append(heading, copy);
+    block.append(head, body);
+    blocks.append(block);
+  }
+
+  function counterOf(length, limit, isGood) {
+    const counter = document.createElement("span");
+    counter.className = isGood ? "counter" : "counter bad";
+    counter.textContent = `${length} симв., нужно ${limit}`;
+    return counter;
+  }
+
+  function textBody(text, className) {
+    const body = document.createElement("div");
+    body.className = className ? `value ${className}` : "value";
+    body.textContent = text;
+    return body;
+  }
+
+  function listOf(items) {
+    const list = document.createElement("ul");
+    list.className = "items";
+    for (const item of items) {
+      const entry = document.createElement("li");
+      entry.textContent = item;
+      list.append(entry);
+    }
+    return list;
+  }
+
+  function characteristicsTable(characteristics) {
+    const table = document.createElement("table");
+    for (const item of characteristics) {
+      const row = table.insertRow();
+      row.insertCell().textContent = item.name;
+      const value = row.insertCell();
+      value.textContent = item.value;
+      if (item.value === NO_DATA) value.className = "no-data";
+    }
+    return table;
+  }
+
+  function bindCopy(button, text) {
+    const label = button.id === "copy-markdown" ? "Копировать всё (Markdown)" : "Копировать";
+    button.textContent = label;
+    button.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(text);
+        button.textContent = "Скопировано";
+      } catch {
+        button.textContent = "Не удалось скопировать";
+      }
+      setTimeout(() => { button.textContent = label; }, COPIED_LABEL_MS);
+    };
+  }
+</script>
+</body>
+</html>
