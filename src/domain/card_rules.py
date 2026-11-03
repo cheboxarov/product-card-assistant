@@ -55,6 +55,7 @@ SERVICE_PATTERNS = (
 REVIEW_WARNINGS = {
     "unsupported_claim": "Не подтверждено данными о приборе: «{quote}». Проверьте или уберите.",
     "filler": "Лишняя фраза без сведений о приборе: «{quote}». Можно убрать.",
+    "language_error": "Ошибка в формулировке: «{quote}». Исправьте.",
 }
 SHORT_DESCRIPTION_WARNING = (
     "Описание короче {minimum} символов ({length}): данных о приборе мало, "
