@@ -61,7 +61,8 @@
     border-radius: 6px;
     background: #fff;
     color: var(--text);
-    font: 15px/1.45 inherit;
+    font-size: 15px;
+    line-height: 1.45;
     font-family: inherit;
   }
   textarea { resize: vertical; }
@@ -117,6 +118,8 @@
   <h1>Карточка товара КИП</h1>
   <p class="lead">Черновик карточки по данным о приборе. Значения характеристик берутся только из входа.</p>
 
+  <div class="message error" id="error" role="alert" hidden></div>
+
   <section class="panel">
     <div class="row examples">
       <span>Примеры:</span>
@@ -155,8 +158,6 @@
       </div>
     </form>
   </section>
-
-  <div class="message error" id="error" role="alert" hidden></div>
 
   <section id="result" hidden>
     <div class="row spread panel">
@@ -210,6 +211,7 @@
   const DESCRIPTION_MIN = 800;
   const DESCRIPTION_MAX = 1200;
   const COPIED_LABEL_MS = 1500;
+  const SPECS_FORMAT_ERROR = "Исправьте строки характеристик: нужен вид «имя: значение», имена не повторяются. Пустое значение: «имя:».";
 
   const byId = (id) => document.getElementById(id);
   const form = byId("card-form");
@@ -246,46 +248,50 @@
   }
 
   function parseSpecs(text) {
-    const specs = {};
+    const pairs = new Map();
+    const rejected = [];
     for (const line of text.split("\n")) {
       if (!line.trim()) continue;
       const colon = line.indexOf(":");
-      if (colon === -1) {
-        specs[line.trim()] = null;
+      const name = line.slice(0, Math.max(colon, 0)).trim();
+      if (!name || pairs.has(name)) {
+        rejected.push(line.trim());
       } else {
-        specs[line.slice(0, colon).trim()] = line.slice(colon + 1).trim();
+        pairs.set(name, line.slice(colon + 1).trim());
       }
     }
-    return specs;
+    return { pairs: [...pairs], rejected };
   }
 
-  function requestBody() {
-    if (activeTab === "json") return byId("json-input").value;
-    return JSON.stringify({
-      name: byId("field-name").value,
-      manufacturer: byId("field-manufacturer").value,
-      specs: parseSpecs(byId("field-specs").value),
-      description: byId("field-description").value,
-    });
+  function formBody(pairs) {
+    const specs = pairs.map(([name, value]) => `${JSON.stringify(name)}:${JSON.stringify(value)}`);
+    const field = (key, id) => `${JSON.stringify(key)}:${JSON.stringify(byId(id).value)}`;
+    return `{${field("name", "field-name")},${field("manufacturer", "field-manufacturer")},"specs":{${specs.join(",")}},${field("description", "field-description")}}`;
   }
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    errorBox.hidden = true;
+    result.hidden = true;
+    const { pairs, rejected } = parseSpecs(byId("field-specs").value);
+    if (activeTab === "form" && rejected.length) {
+      renderError({ detail: SPECS_FORMAT_ERROR, missing_fields: rejected });
+      return;
+    }
+    const body = activeTab === "json" ? byId("json-input").value : formBody(pairs);
     const started = Date.now();
     const elapsed = () => Math.round((Date.now() - started) / 1000);
     const showWait = () => {
       statusLine.textContent = `Идёт генерация: ${elapsed()} с. Обычно около 100 с, бывает до 3 минут.`;
     };
     submit.disabled = true;
-    errorBox.hidden = true;
-    result.hidden = true;
     showWait();
     const timer = setInterval(showWait, 1000);
     try {
       const response = await fetch(CARDS_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: requestBody(),
+        body,
       });
       const data = await response.json().catch(() => null);
       if (response.ok && data) {
