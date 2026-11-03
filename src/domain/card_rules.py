@@ -43,9 +43,9 @@ PLUS_MINUS = re.compile(
 MINUS_WORD = re.compile(r"(?<![^\W_])минус\s+(?=\d)", re.IGNORECASE)
 WORD = re.compile(r"[^\W\d_]+")
 LETTER_OR_DIGIT = re.compile(r"[^\W_]")
-DASHES_AND_PUNCTUATION = re.compile(r"[\s\-–—−_.…?/\\*]*")
+ONLY_PUNCTUATION = re.compile(r"[\s\-_.…?/\\*]*")
 NO_VALUE_MARKS = frozenset(
-    {"n/a", "na", "н/д", "нд", "нет данных", "данных нет", "null", "none"}
+    {"n/a", "n.a", "н/д", "н.д", "нетданных", "данныхнет", "неуказано", "null"}
 )
 BOUNDED_QUOTE = r"(?<![^\W_])(?<!\d[.,]){quote}(?![^\W_])(?![.,]\d)"
 NEGATION_BEFORE_QUOTE = re.compile(r"(?<![^\W_])(не|без) $")
@@ -79,8 +79,8 @@ def is_empty(value: str | int | float | None) -> bool:
     if not isinstance(value, str):
         return value is None
     return (
-        DASHES_AND_PUNCTUATION.fullmatch(value) is not None
-        or value.strip().casefold() in NO_VALUE_MARKS
+        ONLY_PUNCTUATION.fullmatch(value.translate(DASHES)) is not None
+        or "".join(value.split()).rstrip(".").casefold() in NO_VALUE_MARKS
     )
 
 
@@ -173,7 +173,7 @@ def review_issue(
 
 def is_fact_supported(fact: DescriptionFact, description: str) -> bool:
     value_words = _words(fact.value)
-    if LETTER_OR_DIGIT.search(fact.value) is None:
+    if is_empty(fact.value) or LETTER_OR_DIGIT.search(fact.value) is None:
         return False
     if not _quote_supported(description, fact.quote, value_words):
         return False
