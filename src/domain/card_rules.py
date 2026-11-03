@@ -34,7 +34,11 @@ LONG_HEAD_TAIL_FREE = 2
 NEGATIONS = ("не", "без")
 
 DASHES = str.maketrans(dict.fromkeys("\u2010\u2011\u2012\u2013\u2014\u2015\u2212", "-"))
-NUMBER = re.compile(r"(?:(?<![\w.,])-)?\d+(?:[.,]\d+)?")
+NUMBER = re.compile(r"(?:(?:(?<![\w.,%°′)\]»\"])|(?<=\.\.))-)?\d+(?:[.,]\d+)?")
+PLUS_MINUS = re.compile(
+    r"(?:±|\+\s*/?\s*-|(?<![^\W_])плюс[\s/-]*минус)\s*(\d+(?:[.,]\d+)?)",
+    re.IGNORECASE,
+)
 MINUS_WORD = re.compile(r"(?<![^\W_])минус\s+(?=\d)", re.IGNORECASE)
 WORD = re.compile(r"[^\W\d_]+")
 LETTER_OR_DIGIT = re.compile(r"[^\W_]")
@@ -301,9 +305,10 @@ def _input_numbers(product: Product) -> set[str]:
 
 def _numbers(text: str) -> set[str]:
     plain = unicodedata.normalize("NFKC", text).translate(DASHES)
+    signed = MINUS_WORD.sub("-", PLUS_MINUS.sub(r" -\1 \1", plain))
     return {
         format(Decimal(token.replace(",", ".")).normalize(), "f")
-        for token in NUMBER.findall(MINUS_WORD.sub("-", plain))
+        for token in NUMBER.findall(signed)
     }
 
 
