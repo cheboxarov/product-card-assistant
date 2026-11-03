@@ -23,7 +23,7 @@ CASE_IDS = list(CASES)
 GOLDEN_CASE_IDS = [
     case_id for case_id, case in CASES.items() if case["expect"].get("golden_facts")
 ]
-ENOUGH_DATA_CASE_IDS = ["C1", "C2", "C3", "C5", "C7", "C9"]
+ENOUGH_DATA_CASE_IDS = ["C1", "C2", "C3", "C5", "C7", "C9", "C10", "C11", "CK1", "CK2"]
 TITLE_MAX = 70
 DESCRIPTION_MIN = 800
 DESCRIPTION_MAX = 1200
