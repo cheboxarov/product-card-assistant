@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import replace
 from decimal import Decimal
 
@@ -206,110 +206,79 @@ def _characteristics_from_specs(
     )
 
 
-def _title_issues(title: str) -> tuple[CardIssue, ...]:
+def _title_issues(title: str) -> Iterator[CardIssue]:
     if is_empty(title):
-        return (
-            CardIssue(
-                remark="seo_title пуст. Заполни его.",
-                warning="Заголовок пуст: напишите его вручную.",
-            ),
+        yield CardIssue(
+            remark="seo_title пуст. Заполни его.",
+            warning="Заголовок пуст: напишите его вручную.",
         )
-    if len(title) <= TITLE_MAX:
-        return ()
-    return (
-        CardIssue(
+    elif len(title) > TITLE_MAX:
+        yield CardIssue(
             remark=f"Заголовок {len(title)} символов, нужно до {TITLE_MAX}. Сократи.",
             warning=f"Заголовок длиннее {TITLE_MAX} символов ({len(title)}): сократите его перед публикацией.",
-        ),
-    )
-
-
-def _description_issues(description: str) -> tuple[CardIssue, ...]:
-    if is_empty(description):
-        return (
-            CardIssue(
-                remark="seo_description пуст. Напиши текст.",
-                warning="Описание пусто: напишите его вручную.",
-            ),
         )
-    if len(description) <= DESCRIPTION_MAX:
-        return ()
-    return (
-        CardIssue(
+
+
+def _description_issues(description: str) -> Iterator[CardIssue]:
+    if is_empty(description):
+        yield CardIssue(
+            remark="seo_description пуст. Напиши текст.",
+            warning="Описание пусто: напишите его вручную.",
+        )
+    elif len(description) > DESCRIPTION_MAX:
+        yield CardIssue(
             remark=f"seo_description {len(description)} символов, нужно до {DESCRIPTION_MAX}. Сократи без потери значений.",
             warning=f"Описание длиннее {DESCRIPTION_MAX} символов ({len(description)}): сократите его перед публикацией.",
-        ),
-    )
+        )
 
 
-def _queries_issues(queries: tuple[str, ...]) -> tuple[CardIssue, ...]:
+def _queries_issues(queries: tuple[str, ...]) -> Iterator[CardIssue]:
     filled = [_normalize(query) for query in queries if not is_empty(query)]
-    issues: list[CardIssue] = []
     if not QUERIES_MIN <= len(filled) <= QUERIES_MAX:
-        issues.append(
-            CardIssue(
-                remark=f"Запросов {len(filled)}, нужно {QUERIES_MIN}-{QUERIES_MAX}.",
-                warning=f"Поисковых запросов {len(filled)}, нужно от {QUERIES_MIN} до {QUERIES_MAX}.",
-            )
+        yield CardIssue(
+            remark=f"Запросов {len(filled)}, нужно {QUERIES_MIN}-{QUERIES_MAX}.",
+            warning=f"Поисковых запросов {len(filled)}, нужно от {QUERIES_MIN} до {QUERIES_MAX}.",
         )
     if len(set(filled)) != len(filled):
-        issues.append(
-            CardIssue(
-                remark="Есть одинаковые поисковые запросы, сделай их разными.",
-                warning="Есть одинаковые поисковые запросы: оставьте разные.",
-            )
+        yield CardIssue(
+            remark="Есть одинаковые поисковые запросы, сделай их разными.",
+            warning="Есть одинаковые поисковые запросы: оставьте разные.",
         )
-    return tuple(issues)
 
 
-def _commercial_issues(texts: CardTexts) -> tuple[CardIssue, ...]:
-    issues: list[CardIssue] = []
+def _commercial_issues(texts: CardTexts) -> Iterator[CardIssue]:
     if is_empty(texts.commercial.audience):
-        issues.append(
-            CardIssue(
-                remark="commercial.audience пуст.",
-                warning="Не заполнено, кому подходит прибор.",
-            )
+        yield CardIssue(
+            remark="commercial.audience пуст.",
+            warning="Не заполнено, кому подходит прибор.",
         )
     if is_empty(texts.commercial.tasks):
-        issues.append(
-            CardIssue(
-                remark="commercial.tasks пуст.",
-                warning="Не заполнено, какие задачи решает прибор.",
-            )
+        yield CardIssue(
+            remark="commercial.tasks пуст.",
+            warning="Не заполнено, какие задачи решает прибор.",
         )
-    return tuple(issues)
 
 
-def _number_issues(product: Product, texts: CardTexts) -> tuple[CardIssue, ...]:
+def _number_issues(product: Product, texts: CardTexts) -> Iterator[CardIssue]:
     allowed = _input_numbers(product)
-    issues: list[CardIssue] = []
     for field, label, text in _text_fields(texts):
         for number in sorted(_numbers(text) - allowed):
             shown = number.replace(".", ",")
-            issues.append(
-                CardIssue(
-                    remark=f"Число {shown} в поле {field} не встречается в данных о приборе. Убери его.",
-                    warning=f"Число {shown} в {label} не встречается в данных о приборе: проверьте его.",
-                )
+            yield CardIssue(
+                remark=f"Число {shown} в поле {field} не встречается в данных о приборе. Убери его.",
+                warning=f"Число {shown} в {label} не встречается в данных о приборе: проверьте его.",
             )
-    return tuple(issues)
 
 
-def _service_issues(description: str) -> tuple[CardIssue, ...]:
+def _service_issues(description: str) -> Iterator[CardIssue]:
     lowered = description.lower()
-    issues: list[CardIssue] = []
     for pattern in SERVICE_PATTERNS:
         match = pattern.search(lowered)
-        if match is None:
-            continue
-        issues.append(
-            CardIssue(
+        if match is not None:
+            yield CardIssue(
                 remark=f"В seo_description служебное выражение «{match.group()}». Перепиши фразу так, чтобы читатель не видел служебных слов.",
                 warning=f"В описании служебное выражение «{match.group()}»: уберите его перед публикацией.",
             )
-        )
-    return tuple(issues)
 
 
 def _text_fields(texts: CardTexts) -> tuple[tuple[str, str, str], ...]:
