@@ -91,7 +91,7 @@ def _read_content(response: ChatCompletion) -> str:
     if choice.finish_reason != "stop":
         raise LlmFailedError(
             f"Модель не закончила ответ: finish_reason={choice.finish_reason}",
-            retryable=choice.finish_reason == "length",
+            retryable=choice.finish_reason in ("length", None),
         )
     content = choice.message.content
     if content is None or not content.strip():
