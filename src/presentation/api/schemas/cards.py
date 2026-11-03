@@ -79,3 +79,12 @@ class CardResponse(BaseModel):
             ],
             warnings=list(draft.warnings),
         )
+
+
+class ErrorResponse(BaseModel):
+    detail: str
+
+
+class ClientErrorResponse(BaseModel):
+    detail: str
+    missing_fields: list[str] | None = None
