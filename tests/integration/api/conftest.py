@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from application.services.card_generation.service import CardGenerationService
 from domain.use_cases.generate_card import GenerateCard
+from presentation.api.errors import register_error_handlers
 from presentation.api.routes.cards import build_cards_router
 from tests.fakes import FakeLlmClient
 
@@ -27,6 +28,7 @@ MANOMETER = {
 
 def build_test_app(llm: FakeLlmClient) -> FastAPI:
     app = FastAPI()
+    register_error_handlers(app)
     app.include_router(
         build_cards_router(
             generate_card=GenerateCard(

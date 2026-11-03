@@ -7,6 +7,7 @@ from fastapi import FastAPI
 
 from bootstrap.container import build_api_container
 from bootstrap.settings import Settings
+from presentation.api.errors import register_error_handlers
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -20,5 +21,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await container.close()
 
     app = FastAPI(title="product-card-assistant", version="0.1.0", lifespan=lifespan)
+    register_error_handlers(app)
     app.include_router(container.cards_router)
     return app
