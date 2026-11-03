@@ -29,6 +29,9 @@ from tests.integration.api.conftest import CARDS_PATH, MANOMETER
 # 20. Значение из description попадает в список, а specs главнее
 # 21. Пустые specs и manufacturer не доходят до модели ни в написании, ни в ревью, ни в правке
 # 22. Подтверждённый факт заполняет пустую строку specs и убирает имя из missing_fields
+# 23. Производитель строкой в specs: подписи в missing_fields нет, значение в списке
+# 24. Производитель не найден в списке: подпись в missing_fields
+# 25. Число вне входа в уточнении: warning, правки нет, уточнение отдано как есть
 
 
 def filler_issue(quote: str = "контроль давления") -> dict[str, str]:
@@ -636,3 +639,67 @@ async def test_case_22(api_client_for) -> None:
     ]
     assert body["missing_fields"] == ["Защита"]
     assert body["warnings"] == []
+
+
+async def test_case_23(api_client_for) -> None:
+    # 23. Производитель строкой в specs: подписи в missing_fields нет, значение в списке
+    # Arrange
+    llm = FakeLlmClient(card_texts_json(), review_json())
+    client = api_client_for(llm)
+    payload = {
+        "name": "Манометр",
+        "manufacturer": None,
+        "specs": {"Производитель": "ОВЕН"},
+        "description": "Для жидкостей и газов.",
+    }
+
+    # Act
+    response = await client.post(CARDS_PATH, json=payload)
+
+    # Assert
+    body = response.json()
+    assert body["missing_fields"] == []
+    assert body["card"]["characteristics"] == [
+        {"name": "Производитель", "value": "ОВЕН"}
+    ]
+
+
+async def test_case_24(api_client_for) -> None:
+    # 24. Производитель не найден в списке: подпись в missing_fields
+    # Arrange
+    llm = FakeLlmClient(card_texts_json(), review_json())
+    client = api_client_for(llm)
+    payload = {
+        "name": "Манометр",
+        "manufacturer": None,
+        "specs": {"Диаметр": "100 мм"},
+        "description": "Для жидкостей и газов.",
+    }
+
+    # Act
+    response = await client.post(CARDS_PATH, json=payload)
+
+    # Assert
+    assert response.json()["missing_fields"] == ["Производитель"]
+
+
+async def test_case_25(api_client_for) -> None:
+    # 25. Число вне входа в уточнении: warning, правки нет, уточнение отдано как есть
+    # Arrange
+    clarification = {"field": "Класс точности", "reason": "в описании 2,5"}
+    llm = FakeLlmClient(
+        card_texts_json(needs_clarification=[clarification]),
+        review_json(),
+    )
+    client = api_client_for(llm)
+
+    # Act
+    response = await client.post(CARDS_PATH, json=MANOMETER)
+
+    # Assert
+    body = response.json()
+    assert body["needs_clarification"] == [clarification]
+    assert body["warnings"] == [
+        "В уточнении «Класс точности» число 2,5 не встречается в данных о приборе: проверьте его."
+    ]
+    assert len(llm.requests) == 2

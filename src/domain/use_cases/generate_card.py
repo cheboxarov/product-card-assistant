@@ -3,10 +3,9 @@ from __future__ import annotations
 from dataclasses import replace
 
 from domain.card_rules import (
-    SPECS_LABEL,
-    filled_spec_names,
     find_missing_input,
     has_too_little_data,
+    missing_after_assembly,
 )
 from domain.entities.card import CardDraft
 from domain.entities.product import Product
@@ -23,8 +22,5 @@ class GenerateCard:
         if has_too_little_data(product):
             raise NotEnoughDataError(missing)
         draft = await self._card_generator.generate(product)
-        filled = filled_spec_names(product, draft.characteristics)
-        known = tuple(
-            label for label in missing if label != SPECS_LABEL and label not in filled
-        )
+        known = missing_after_assembly(missing, draft.characteristics)
         return replace(draft, missing_fields=(*known, *draft.missing_fields))

@@ -11,6 +11,7 @@ from domain.entities.card import (
     CardIssue,
     CardTexts,
     Characteristic,
+    Clarification,
     DescriptionFact,
 )
 from domain.entities.product import Product
@@ -63,10 +64,16 @@ FACT_DROPPED_WARNING = (
     "Характеристика «{name}» не добавлена: значение не подтверждено описанием прибора, "
     "проверьте вручную."
 )
+CLARIFICATION_NUMBER_WARNING = (
+    "В уточнении «{field}» число {number} не встречается в данных о приборе: "
+    "проверьте его."
+)
 
 
 def is_empty(value: str | int | float | None) -> bool:
-    return value is None or (isinstance(value, str) and not value.strip())
+    return value is None or (
+        isinstance(value, str) and LETTER_OR_DIGIT.search(value) is None
+    )
 
 
 def find_missing_input(product: Product) -> tuple[str, ...]:
@@ -84,16 +91,18 @@ def find_missing_input(product: Product) -> tuple[str, ...]:
     return tuple(missing)
 
 
-def filled_spec_names(
-    product: Product,
+def missing_after_assembly(
+    missing: Iterable[str],
     characteristics: Iterable[Characteristic],
-) -> set[str]:
-    filled = {item.name for item in characteristics if item.value != NO_DATA}
-    return {
-        name
-        for name, value in product.specs.items()
-        if is_empty(value) and name in filled
+) -> tuple[str, ...]:
+    filled = {
+        _normalize(item.name) for item in characteristics if item.value != NO_DATA
     }
+    return tuple(
+        label
+        for label in missing
+        if label != SPECS_LABEL and _normalize(label) not in filled
+    )
 
 
 def has_too_little_data(product: Product) -> bool:
@@ -120,6 +129,21 @@ def short_description_warnings(description: str) -> tuple[str, ...]:
             minimum=DESCRIPTION_MIN,
             length=len(description),
         ),
+    )
+
+
+def clarification_warnings(
+    product: Product,
+    clarifications: Iterable[Clarification],
+) -> tuple[str, ...]:
+    allowed = _input_numbers(product)
+    return tuple(
+        CLARIFICATION_NUMBER_WARNING.format(
+            field=item.field,
+            number=number.replace(".", ","),
+        )
+        for item in clarifications
+        for number in sorted(_numbers(f"{item.field}\n{item.reason}") - allowed)
     )
 
 

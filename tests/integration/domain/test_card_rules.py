@@ -4,12 +4,23 @@ import pytest
 
 from domain.card_rules import (
     assemble_characteristics,
+    clarification_warnings,
     find_card_issues,
+    find_missing_input,
+    has_too_little_data,
+    is_empty,
     is_fact_supported,
+    missing_after_assembly,
     review_issue,
     short_description_warnings,
 )
-from domain.entities.card import CardTexts, Characteristic, Commercial, DescriptionFact
+from domain.entities.card import (
+    CardTexts,
+    Characteristic,
+    Clarification,
+    Commercial,
+    DescriptionFact,
+)
 from domain.entities.product import Product
 
 # Test cases:
@@ -47,6 +58,11 @@ from domain.entities.product import Product
 # 32. Минус после многоточия это знак: тексты и факты с диапазоном из двух отрицательных чисел
 # 33. Плюс-минус в любом написании это два числа, x и -x
 # 34. Плюс-минус вплотную к числу не теряет ни одного из чисел, лишний знак даёт замечание
+# 35. Строка без букв и цифр пуста, число и значение с буквой или цифрой нет
+# 36. Прочерк в specs и в описании: в недостающих, в списке «данных нет»; других данных нет, значит их мало
+# 37. Подпись из входа убирается, если в итоговом списке есть строка с таким именем и значением
+# 38. Подпись остаётся, если строки нет или значение «данных нет»; подпись «Характеристики» не возвращается
+# 39. Числа уточнения сверяются с числами входа: вне входа warning на каждое, из входа нет
 
 
 PRODUCT = Product(
@@ -873,3 +889,114 @@ def test_case_34() -> None:
     assert [issue.remark for issue in extra] == [
         "Число -0,5 в поле seo_title не встречается в данных о приборе. Убери его."
     ]
+
+
+@pytest.mark.parametrize(
+    ("value", "empty"),
+    [
+        (None, True),
+        ("", True),
+        ("  ", True),
+        ("—", True),
+        ("-", True),
+        (" – ", True),
+        ("...", True),
+        ("?", True),
+        ("_", True),
+        ("0", False),
+        ("н/д", False),
+        ("G½", False),
+        ("½", False),
+        (0, False),
+        (1.5, False),
+    ],
+)
+def test_case_35(value, empty) -> None:
+    # 35. Строка без букв и цифр пуста, число и значение с буквой или цифрой нет
+    # Act
+    result = is_empty(value)
+
+    # Assert
+    assert result is empty
+
+
+def test_case_36() -> None:
+    # 36. Прочерк в specs и в описании: в недостающих, в списке «данных нет»; других данных нет, значит их мало
+    # Arrange
+    product = Product(
+        name="Манометр",
+        manufacturer="—",
+        specs={"Класс точности": "—"},
+        description="-",
+    )
+
+    # Act
+    missing = find_missing_input(product)
+    too_little = has_too_little_data(product)
+    assembled = assemble_characteristics(product, facts=(), missing_names=())
+
+    # Assert
+    assert missing == ("Производитель", "Класс точности", "Описание")
+    assert too_little is True
+    assert assembled.characteristics == (
+        Characteristic(name="Класс точности", value="данных нет"),
+    )
+
+
+@pytest.mark.parametrize(
+    "row_name",
+    ["Производитель", "производитель", "  ПРОИЗВОДИТЕЛЬ "],
+)
+def test_case_37(row_name) -> None:
+    # 37. Подпись из входа убирается, если в итоговом списке есть строка с таким именем и значением
+    # Arrange
+    characteristics = (Characteristic(name=row_name, value="ОВЕН"),)
+
+    # Act
+    missing = missing_after_assembly(
+        ("Производитель", "Описание"),
+        characteristics,
+    )
+
+    # Assert
+    assert missing == ("Описание",)
+
+
+def test_case_38() -> None:
+    # 38. Подпись остаётся, если строки нет или значение «данных нет»; подпись «Характеристики» не возвращается
+    # Arrange
+    characteristics = (
+        Characteristic(name="Производитель", value="данных нет"),
+        Characteristic(name="Диаметр", value="100 мм"),
+    )
+
+    # Act
+    missing = missing_after_assembly(
+        ("Производитель", "Характеристики", "Описание"),
+        characteristics,
+    )
+
+    # Assert
+    assert missing == ("Производитель", "Описание")
+
+
+def test_case_39() -> None:
+    # 39. Числа уточнения сверяются с числами входа: вне входа warning на каждое, из входа нет
+    # Arrange
+    clarifications = (
+        Clarification(
+            field="Диапазон", reason="в характеристиках 0–1,6, в описании 2,5"
+        ),
+        Clarification(field="Диаметр 100", reason="неясна единица"),
+        Clarification(field="Класс 4", reason="в описании 7"),
+    )
+
+    # Act
+    warnings = clarification_warnings(PRODUCT, clarifications)
+
+    # Assert
+    assert warnings == (
+        "В уточнении «Диапазон» число 2,5 не встречается в данных о приборе: проверьте его.",
+        "В уточнении «Класс 4» число 4 не встречается в данных о приборе: проверьте его.",
+        "В уточнении «Класс 4» число 7 не встречается в данных о приборе: проверьте его.",
+    )

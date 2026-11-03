@@ -27,7 +27,7 @@ FULL_PRODUCT = Product(
 
 @pytest.mark.parametrize(
     ("manufacturer", "description"),
-    [(None, None), ("", ""), ("   ", "  \n ")],
+    [(None, None), ("", ""), ("   ", "  \n "), ("—", "-")],
 )
 def test_case_1(manufacturer, description) -> None:
     # 1. Пустые значения specs, пустой manufacturer и пустое описание не попадают в сведения о приборе
@@ -35,7 +35,13 @@ def test_case_1(manufacturer, description) -> None:
     product = Product(
         name="Термометр ТБ-63",
         manufacturer=manufacturer,
-        specs={"Диапазон": "0–120 °С", "Защита": None, "Класс": "", "Вес": "  "},
+        specs={
+            "Диапазон": "0–120 °С",
+            "Защита": None,
+            "Класс": "",
+            "Вес": "  ",
+            "Материал": "—",
+        },
         description=description,
     )
 
