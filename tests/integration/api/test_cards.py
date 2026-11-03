@@ -89,7 +89,7 @@ async def test_case_4(api_client_for) -> None:
     assert "Манометр DM 02" in write.user
     assert "0–1,6 МПа" in write.user
     assert write.schema_name == "card_texts"
-    assert write.reasoning_effort is None
+    assert write.reasoning_effort == "low"
     assert set(write.json_schema["properties"]) == {
         "description_facts",
         "missing_characteristics",

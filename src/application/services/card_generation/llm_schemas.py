@@ -25,7 +25,7 @@ class WriteCardOutput(BaseModel):
 class ReviewIssueOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    kind: Literal["unsupported_claim", "filler"]
+    kind: Literal["unsupported_claim", "filler", "language_error"]
     quote: str
     reason: str
 

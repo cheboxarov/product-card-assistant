@@ -14,7 +14,7 @@ from application.services.card_generation.llm_schemas import (
 from application.services.card_generation.prompts import review_card
 from application.services.card_generation.service import (
     CARD_REVIEW_SCHEMA_NAME,
-    REVIEW_REASONING_EFFORT,
+    REASONING_EFFORT,
 )
 from bootstrap.settings import Settings
 from domain.card_rules import review_issue
@@ -82,7 +82,7 @@ async def run_review(
                 user=review_card.build_message(product, draft_of(case)),
                 schema_name=CARD_REVIEW_SCHEMA_NAME,
                 json_schema=ReviewCardOutput.model_json_schema(),
-                reasoning_effort=REVIEW_REASONING_EFFORT,
+                reasoning_effort=REASONING_EFFORT,
             )
         )
     issues = ReviewCardOutput.model_validate_json(raw).model_dump()["issues"]
