@@ -14,6 +14,7 @@ from application.services.card_generation.prompts import review_card, write_card
 from application.services.card_generation.state import CardState
 from domain.card_rules import (
     assemble_characteristics,
+    clarification_warnings,
     find_card_issues,
     review_issue,
     short_description_warnings,
@@ -175,6 +176,7 @@ def _build_draft(
         needs_clarification=tuple(draft.needs_clarification),
         warnings=(
             *assembled.warnings,
+            *clarification_warnings(product, draft.needs_clarification),
             *short_description_warnings(texts.seo_description),
             *(issue.warning for issue in issues),
         ),

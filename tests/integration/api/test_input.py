@@ -98,6 +98,10 @@ async def test_case_3(api_client_for, kwargs) -> None:
             ["Вес", "Описание"],
         ),
         (
+            {"name": "x", "manufacturer": "y", "specs": {"Класс точности": "—"}},
+            ["Класс точности", "Описание"],
+        ),
+        (
             {
                 "name": "x",
                 "manufacturer": "y",
