@@ -30,11 +30,14 @@ SHORT_HEAD_WORD_MAX = 4
 SHORT_HEAD_TAIL_FREE = 1
 LONG_HEAD_MIN = 4
 LONG_HEAD_TAIL_FREE = 2
-NEGATION = "не"
+NEGATIONS = ("не", "без")
 
 DASHES = str.maketrans(dict.fromkeys("\u2010\u2011\u2012\u2013\u2014\u2015\u2212", "-"))
 NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
 WORD = re.compile(r"[^\W\d_]+")
+LETTER_OR_DIGIT = re.compile(r"[^\W_]")
+BOUNDED_QUOTE = r"(?<![^\W_])(?<!\d[.,]){quote}(?![^\W_])(?![.,]\d)"
+NEGATION_BEFORE_QUOTE = re.compile(r"(?<![^\W_])(не|без) $")
 SERVICE_PATTERNS = (
     re.compile(r"json"),
     re.compile(r"входн\w*\s+(?:данн\w*|json)"),
@@ -118,13 +121,15 @@ def review_issue(
 
 
 def is_fact_supported(fact: DescriptionFact, description: str) -> bool:
-    if is_empty(fact.value) or not _contains_quote(description, fact.quote):
+    value_words = _words(fact.value)
+    if LETTER_OR_DIGIT.search(fact.value) is None:
+        return False
+    if not _quote_supported(description, fact.quote, value_words):
         return False
     if not _numbers(fact.value) <= _numbers(fact.quote):
         return False
     quote_words = _words(fact.quote)
-    value_words = _words(fact.value)
-    if NEGATION in quote_words and NEGATION not in value_words:
+    if any(word in quote_words and word not in value_words for word in NEGATIONS):
         return False
     return all(_word_supported(word, quote_words) for word in value_words)
 
@@ -317,6 +322,23 @@ def _word_supported(word: str, quote_words: list[str]) -> bool:
     else:
         head = word[: max(LONG_HEAD_MIN, len(word) - LONG_HEAD_TAIL_FREE)]
     return any(quote_word.startswith(head) for quote_word in quote_words)
+
+
+def _quote_supported(description: str, quote: str, value_words: list[str]) -> bool:
+    needle = _normalize(quote)
+    if not needle:
+        return False
+    text = _normalize(description)
+    pattern = BOUNDED_QUOTE.format(quote=re.escape(needle))
+    return any(
+        not _negation_lost(text[: match.start()], value_words)
+        for match in re.finditer(pattern, text)
+    )
+
+
+def _negation_lost(text_before: str, value_words: list[str]) -> bool:
+    negation = NEGATION_BEFORE_QUOTE.search(text_before)
+    return negation is not None and negation.group(1) not in value_words
 
 
 def _contains_quote(text: str, quote: str) -> bool:
