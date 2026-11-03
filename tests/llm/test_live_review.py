@@ -22,7 +22,7 @@ from domain.entities.card import CardTexts, Commercial
 from domain.interfaces.infrastructure.llm_client import LlmRequest
 from infrastructure.openrouter.client import OpenRouterClient
 from presentation.api.schemas.cards import CardRequest
-from tests.llm.conftest import CASES, MAX_CARDS_AT_ONCE, CaseRun, build_openai_client
+from tests.llm.conftest import CASES, MAX_CARDS_AT_ONCE, CaseRun, build_counted_client
 
 # Test cases:
 # 1. Подмешанные выдумки и вода найдены все
@@ -56,7 +56,7 @@ def live_reviews(live_settings: Settings) -> dict[str, ReviewRun]:
 
 async def run_all_reviews(settings: Settings) -> dict[str, ReviewRun]:
     total = CaseRun("итого")
-    client = build_openai_client(settings, total)
+    client = build_counted_client(settings, total)
     llm = OpenRouterClient(client=client, model=settings.openrouter_model)
     semaphore = asyncio.Semaphore(MAX_CARDS_AT_ONCE)
     runs = await asyncio.gather(
