@@ -40,6 +40,10 @@ from domain.entities.product import Product
 # 25. Значение без букв и цифр: факт отброшен
 # 26. Сборка: подтверждённый факт встаёт на место пустой строки specs, порядок прежний, второй строки нет
 # 27. Сборка: неподтверждённый факт с именем пустой строки specs даёт warning, строка остаётся пустой
+# 28. Числа со знаком в текстах: минус вплотную к числу часть числа, слово «минус» то же, плюс равен отсутствию знака
+# 29. Число без знака и с минусом это разные числа, вид минуса не важен
+# 30. Минус после цифры, буквы, разделителя или с пробелом это не знак
+# 31. Числа факта сравниваются со знаком, цитата без минуса из описания не проходит
 
 
 PRODUCT = Product(
@@ -675,3 +679,102 @@ def test_case_27() -> None:
     assert result.warnings == (
         "Характеристика «Защита» не добавлена: значение не подтверждено описанием прибора, проверьте вручную.",
     )
+
+
+@pytest.mark.parametrize(
+    ("source", "text"),
+    [
+        ("–40…+100 °С", "-40 и +100 °С"),
+        ("–40…+100 °С", "−40 и 100 °С"),
+        ("+100 °С", "100 °С"),
+        ("(-20 °С)", "от -20 °С"),
+        ("−0,5 МПа", "–0.5 МПа"),
+        ("–40…+100 °С", "от минус 40 до плюс 100 °С"),
+        ("Минус 40 °С", "-40 °С"),
+    ],
+)
+def test_case_28(source, text) -> None:
+    # 28. Числа со знаком в текстах: минус вплотную к числу часть числа, слово «минус» то же, плюс равен отсутствию знака
+    # Arrange
+    product = Product(
+        name="Прибор", manufacturer=None, specs={"П": source}, description=None
+    )
+
+    # Act
+    issues = find_card_issues(product, texts_with(seo_title=text))
+
+    # Assert
+    assert issues == ()
+
+
+@pytest.mark.parametrize("minus", list("-\u2010\u2011\u2012\u2013\u2014\u2015\u2212"))
+def test_case_29(minus) -> None:
+    # 29. Число без знака и с минусом это разные числа, вид минуса не важен
+    # Arrange
+    unsigned = Product(
+        name="Прибор", manufacturer=None, specs={"П": "20 °С"}, description=None
+    )
+    signed = Product(
+        name="Прибор", manufacturer=None, specs={"П": f"{minus}20 °С"}, description=None
+    )
+
+    # Act
+    extra_minus = find_card_issues(unsigned, texts_with(seo_title=f"Прибор {minus}20"))
+    lost_minus = find_card_issues(signed, texts_with(seo_title="Прибор 20"))
+    same = find_card_issues(signed, texts_with(seo_title="Прибор −20"))
+
+    # Assert
+    assert [issue.remark for issue in extra_minus] == [
+        "Число -20 в поле seo_title не встречается в данных о приборе. Убери его."
+    ]
+    assert [issue.remark for issue in lost_minus] == [
+        "Число 20 в поле seo_title не встречается в данных о приборе. Убери его."
+    ]
+    assert same == ()
+
+
+@pytest.mark.parametrize(
+    ("source", "text"),
+    [
+        ("4–20 мА", "4 и 20 мА"),
+        ("4 – 20 мА", "4 и 20 мА"),
+        ("ПД100-1Х1", "ПД 100 1 Х 1"),
+        ("DM-02", "DM 02"),
+        ("0–1,6 МПа", "0 и 1,6 МПа"),
+        ("84,0...106,7 кПа", "84 и 106,7 кПа"),
+        ("–40…–20 °С", "-40 и 20 °С"),
+        ("–40...–20 °С", "-40 и 20 °С"),
+        ("1,-5", "1 и 5"),
+        ("1.-5", "1 и 5"),
+    ],
+)
+def test_case_30(source, text) -> None:
+    # 30. Минус после цифры, буквы, разделителя или с пробелом это не знак
+    # Arrange
+    product = Product(
+        name="Прибор", manufacturer=None, specs={"П": source}, description=None
+    )
+
+    # Act
+    issues = find_card_issues(product, texts_with(seo_title=text))
+
+    # Assert
+    assert issues == ()
+
+
+@pytest.mark.parametrize(
+    ("value", "quote", "supported"),
+    [
+        ("40…100 °С", "–40…+100 °С", False),
+        ("40…100 °С", "40…+100 °С", False),
+        ("−40…100 °С", "–40…+100 °С", True),
+        ("-40, +100 °С", "–40…+100 °С", True),
+    ],
+)
+def test_case_31(value, quote, supported) -> None:
+    # 31. Числа факта сравниваются со знаком, цитата без минуса из описания не проходит
+    # Act
+    result = is_fact_supported(fact(value, quote), "Среда: –40…+100 °С.")
+
+    # Assert
+    assert result is supported

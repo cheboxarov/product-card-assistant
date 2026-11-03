@@ -34,7 +34,8 @@ LONG_HEAD_TAIL_FREE = 2
 NEGATIONS = ("не", "без")
 
 DASHES = str.maketrans(dict.fromkeys("\u2010\u2011\u2012\u2013\u2014\u2015\u2212", "-"))
-NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
+NUMBER = re.compile(r"(?:(?<![\w.,])-)?\d+(?:[.,]\d+)?")
+MINUS_WORD = re.compile(r"(?<![^\W_])минус\s+(?=\d)", re.IGNORECASE)
 WORD = re.compile(r"[^\W\d_]+")
 LETTER_OR_DIGIT = re.compile(r"[^\W_]")
 BOUNDED_QUOTE = r"(?<![^\W_])(?<!\d[.,]){quote}(?![^\W_])(?![.,]\d)"
@@ -139,7 +140,8 @@ def is_fact_supported(fact: DescriptionFact, description: str) -> bool:
         return False
     if not _quote_supported(description, fact.quote, value_words):
         return False
-    if not _numbers(fact.value) <= _numbers(fact.quote):
+    quote_numbers = _numbers(fact.quote)
+    if not _numbers(fact.value) <= quote_numbers <= _numbers(description):
         return False
     quote_words = _words(fact.quote)
     if any(word in quote_words and word not in value_words for word in NEGATIONS):
@@ -329,9 +331,10 @@ def _input_numbers(product: Product) -> set[str]:
 
 
 def _numbers(text: str) -> set[str]:
+    plain = unicodedata.normalize("NFKC", text).translate(DASHES)
     return {
         format(Decimal(token.replace(",", ".")).normalize(), "f")
-        for token in NUMBER.findall(unicodedata.normalize("NFKC", text))
+        for token in NUMBER.findall(MINUS_WORD.sub("-", plain))
     }
 
 
