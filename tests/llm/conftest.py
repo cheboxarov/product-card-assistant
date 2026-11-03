@@ -10,12 +10,10 @@ import pytest
 from openai import AsyncOpenAI
 from pydantic import ValidationError
 
-from application.services.card_generation.service import CardGenerationService
+from bootstrap.container import build_generate_card, build_openai_client
 from bootstrap.settings import Settings
 from domain.entities.card import CardDraft
 from domain.exceptions import LlmError
-from domain.use_cases.generate_card import GenerateCard
-from infrastructure.openrouter.client import OpenRouterClient
 from presentation.api.markdown import render_markdown
 from presentation.api.schemas.cards import CardRequest
 
@@ -49,12 +47,8 @@ def live_runs(live_settings: Settings) -> dict[str, CaseRun]:
     return asyncio.run(run_all_cases(live_settings))
 
 
-def build_openai_client(settings: Settings, run: CaseRun) -> AsyncOpenAI:
-    client = AsyncOpenAI(
-        api_key=settings.openrouter_api_key.get_secret_value(),
-        base_url=settings.openrouter_base_url,
-        max_retries=0,
-    )
+def build_counted_client(settings: Settings, run: CaseRun) -> AsyncOpenAI:
+    client = build_openai_client(settings)
     completions = client.chat.completions
     create = completions.create
 
@@ -88,13 +82,9 @@ async def run_case(
     run = CaseRun(case_id)
     product = CardRequest.model_validate(CASES[case_id]["device"]).to_product()
     async with semaphore:
-        client = build_openai_client(settings, run)
-        generate_card = GenerateCard(
-            card_generator=CardGenerationService(
-                llm_client=OpenRouterClient(
-                    client=client, model=settings.openrouter_model
-                ),
-            )
+        client = build_counted_client(settings, run)
+        generate_card = build_generate_card(
+            openai_client=client, model=settings.openrouter_model
         )
         started = time.monotonic()
         try:
@@ -115,7 +105,7 @@ def print_run(run: CaseRun) -> None:
     if run.draft is None:
         print(f"{head}, сбой: {run.error}")
         return
-    texts = run.draft.card.texts
+    texts = run.draft.texts
     print(
         f"{head}, заголовок {len(texts.seo_title)}, описание {len(texts.seo_description)}"
     )

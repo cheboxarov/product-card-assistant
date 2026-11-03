@@ -19,13 +19,9 @@ from domain.card_rules import (
     short_description_warnings,
 )
 from domain.entities.card import (
-    Card,
     CardDraft,
     CardIssue,
     CardTexts,
-    Clarification,
-    Commercial,
-    DescriptionFact,
 )
 from domain.entities.product import Product
 from domain.exceptions import LlmError, LlmFailedError, LlmUnavailableError
@@ -157,10 +153,7 @@ def _to_texts(draft: WriteCardOutput) -> CardTexts:
         seo_title=draft.seo_title,
         seo_description=draft.seo_description,
         search_queries=tuple(draft.search_queries),
-        commercial=Commercial(
-            audience=draft.commercial.audience,
-            tasks=draft.commercial.tasks,
-        ),
+        commercial=draft.commercial,
     )
 
 
@@ -172,19 +165,14 @@ def _build_draft(
     texts = _to_texts(draft)
     assembled = assemble_characteristics(
         product,
-        facts=[
-            DescriptionFact(name=fact.name, value=fact.value, quote=fact.quote)
-            for fact in draft.description_facts
-        ],
+        facts=draft.description_facts,
         missing_names=draft.missing_characteristics,
     )
     return CardDraft(
-        card=Card(texts=texts, characteristics=assembled.characteristics),
+        texts=texts,
+        characteristics=assembled.characteristics,
         missing_fields=assembled.added_missing,
-        needs_clarification=tuple(
-            Clarification(field=item.field, reason=item.reason)
-            for item in draft.needs_clarification
-        ),
+        needs_clarification=tuple(draft.needs_clarification),
         warnings=(
             *assembled.warnings,
             *short_description_warnings(texts.seo_description),

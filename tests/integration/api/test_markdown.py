@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from domain.entities.card import (
-    Card,
     CardDraft,
     CardTexts,
     Characteristic,
@@ -34,7 +33,8 @@ def test_case_1() -> None:
     # 1. Полный черновик: все секции по порядку, текст точный
     # Arrange
     draft = CardDraft(
-        card=Card(texts=TEXTS, characteristics=CHARACTERISTICS),
+        texts=TEXTS,
+        characteristics=CHARACTERISTICS,
         missing_fields=("Производитель", "Защита"),
         needs_clarification=(
             Clarification(
@@ -87,7 +87,13 @@ def test_case_1() -> None:
 def test_case_2() -> None:
     # 2. Нечего уточнять и нет предупреждений: этих секций нет
     # Arrange
-    draft = CardDraft(card=Card(texts=TEXTS, characteristics=CHARACTERISTICS))
+    draft = CardDraft(
+        texts=TEXTS,
+        characteristics=CHARACTERISTICS,
+        missing_fields=(),
+        needs_clarification=(),
+        warnings=(),
+    )
 
     # Act
     result = render_markdown(draft)

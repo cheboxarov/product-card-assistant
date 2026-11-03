@@ -4,39 +4,22 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
-class DescriptionFactOutput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    name: str
-    value: str
-    quote: str
-
-
-class ClarificationOutput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    field: str
-    reason: str
-
-
-class CommercialOutput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    audience: str
-    tasks: str
+from domain.card_rules import QUERIES_MAX, QUERIES_MIN
+from domain.entities.card import Clarification, Commercial, DescriptionFact
 
 
 class WriteCardOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    description_facts: list[DescriptionFactOutput]
+    description_facts: list[DescriptionFact]
     missing_characteristics: Annotated[list[str], Field(max_length=5)]
-    needs_clarification: list[ClarificationOutput]
+    needs_clarification: list[Clarification]
     seo_title: str
     seo_description: str
-    search_queries: Annotated[list[str], Field(min_length=3, max_length=5)]
-    commercial: CommercialOutput
+    search_queries: Annotated[
+        list[str], Field(min_length=QUERIES_MIN, max_length=QUERIES_MAX)
+    ]
+    commercial: Commercial
 
 
 class ReviewIssueOutput(BaseModel):

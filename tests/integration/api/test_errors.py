@@ -3,9 +3,13 @@ from __future__ import annotations
 import asyncio
 import logging
 
+import httpx2
+from openai import AsyncOpenAI
+
 from application.services.card_generation import service as service_module
 from domain.exceptions import LlmFailedError, LlmUnavailableError
 from domain.interfaces.infrastructure.llm_client import LlmRequest
+from infrastructure.openrouter.client import OpenRouterClient
 from tests.fakes import FakeLlmClient, card_texts_json, review_json
 from tests.integration.api.conftest import CARDS_PATH, MANOMETER
 
@@ -16,6 +20,7 @@ from tests.integration.api.conftest import CARDS_PATH, MANOMETER
 # 4. Ответ не прошёл схему дважды: 502, два вызова
 # 5. Ответ не прошёл схему, затем успех: 200
 # 6. Граф не уложился в общий таймаут: 503
+# 7. Кривой ответ OpenRouter при HTTP 200: 502, повтор, одна строка лога
 
 
 def failures(caplog) -> list[logging.LogRecord]:
@@ -126,3 +131,31 @@ async def test_case_6(api_client_for, monkeypatch) -> None:
 
     # Assert
     assert response.status_code == 503
+
+
+async def test_case_7(api_client_for, caplog) -> None:
+    # 7. Кривой ответ OpenRouter при HTTP 200: 502, повтор, одна строка лога
+    # Arrange
+    calls: list[httpx2.Request] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        calls.append(request)
+        return httpx2.Response(200, json={"choices": [{"finish_reason": "stop"}]})
+
+    openai_client = AsyncOpenAI(
+        api_key="test-key",
+        base_url="https://openrouter.ai/api/v1",
+        max_retries=0,
+        http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(handler)),
+    )
+    client = api_client_for(OpenRouterClient(client=openai_client, model="test/model"))
+
+    # Act
+    response = await client.post(CARDS_PATH, json=MANOMETER)
+    await openai_client.close()
+
+    # Assert
+    assert response.status_code == 502
+    assert len(calls) == 2
+    assert len(failures(caplog)) == 1
+    assert failures(caplog)[0].getMessage().startswith("llm_failure status=502")

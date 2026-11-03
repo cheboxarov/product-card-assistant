@@ -54,7 +54,7 @@ class OpenRouterClient(LlmClient):
             ) from exc
         except APIStatusError as exc:
             raise _status_error(exc.status_code, exc.body) from exc
-        except json.JSONDecodeError as exc:
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
             raise LlmFailedError(
                 "OpenRouter вернул ответ не в формате JSON",
                 retryable=True,
@@ -73,13 +73,21 @@ def _extract_json(response: object) -> str:
         raise LlmFailedError(
             "OpenRouter вернул ответ не в формате JSON", retryable=True
         )
-    error = getattr(response, "error", None)
-    if error is not None:
-        code = error.get("code") if isinstance(error, dict) else None
-        raise _status_error(code, error)
+    _raise_error_object(response)
+    try:
+        return _read_content(response)
+    except (AttributeError, KeyError, TypeError) as exc:
+        raise LlmFailedError(
+            "OpenRouter вернул ответ неверной формы",
+            retryable=True,
+        ) from exc
+
+
+def _read_content(response: ChatCompletion) -> str:
     if not response.choices:
         raise LlmFailedError("В ответе OpenRouter нет choices", retryable=True)
     choice = response.choices[0]
+    _raise_error_object(choice)
     if choice.finish_reason != "stop":
         raise LlmFailedError(
             f"Модель не закончила ответ: finish_reason={choice.finish_reason}",
@@ -89,6 +97,13 @@ def _extract_json(response: object) -> str:
     if content is None or not content.strip():
         raise LlmFailedError("Модель вернула пустой ответ", retryable=True)
     return content
+
+
+def _raise_error_object(source: object) -> None:
+    error = getattr(source, "error", None)
+    if error is not None:
+        code = error.get("code") if isinstance(error, dict) else None
+        raise _status_error(code, error)
 
 
 def _status_error(status: object, error: object) -> LlmError:

@@ -32,8 +32,18 @@ from domain.entities.product import Product
 # 17. Сборка: значения specs как во входе и по порядку, затем факты, затем отсутствующие
 # 18. Сборка: specs главнее факта, дубли убираются по нормализованному имени
 # 19. Сборка: отброшенный факт даёт warning, значения в списке нет
-# 20. Сборка: факт с именем из specs не проверяется и не даёт warning
+# 20. Сборка: факт с именем из заполненной строки specs не проверяется и не даёт warning
 # 21. Сборка: пустые имена пропускаются, дубли внутри specs остаются как во входе
+# 22. Цитата ищется с границами: слева и справа не буква, не цифра и не обрывок числа
+# 23. «Не» или «без» сразу перед цитатой в описании и нет в значении: факт отброшен
+# 24. «Без» внутри цитаты не теряется, как и «не»
+# 25. Значение без букв и цифр: факт отброшен
+# 26. Сборка: подтверждённый факт встаёт на место пустой строки specs, порядок прежний, второй строки нет
+# 27. Сборка: неподтверждённый факт с именем пустой строки specs даёт warning, строка остаётся пустой
+# 28. Числа со знаком в текстах: минус вплотную к числу часть числа, слово «минус» то же, плюс равен отсутствию знака
+# 29. Число без знака и с минусом это разные числа, вид минуса не важен
+# 30. Минус после цифры, буквы, разделителя или с пробелом это не знак
+# 31. Числа факта сравниваются со знаком, цитата без минуса из описания не проходит
 
 
 PRODUCT = Product(
@@ -493,18 +503,18 @@ def test_case_19() -> None:
 
 
 def test_case_20() -> None:
-    # 20. Сборка: факт с именем из specs не проверяется и не даёт warning
+    # 20. Сборка: факт с именем из заполненной строки specs не проверяется и не даёт warning
     # Act
     result = assemble_characteristics(
         PRODUCT,
-        facts=[fact("IP68", "IP68", name="Защита")],
+        facts=[fact("IP68", "IP68", name="Диапазон")],
         missing_names=[],
     )
 
     # Assert
     assert result.warnings == ()
-    assert result.characteristics[2] == Characteristic(
-        name="Защита", value="данных нет"
+    assert result.characteristics[0] == Characteristic(
+        name="Диапазон", value="0–1,6 МПа"
     )
 
 
@@ -532,3 +542,239 @@ def test_case_21() -> None:
     )
     assert result.added_missing == ()
     assert result.warnings == ()
+
+
+@pytest.mark.parametrize(
+    ("value", "quote", "description", "supported"),
+    [
+        ("агрессивные среды", "агрессивных сред", "Для неагрессивных сред", False),
+        ("газ", "газ", "Для газов", False),
+        ("100", "100", "Всего 2100", False),
+        ("10", "10", "Всего 100", False),
+        ("6 МПа", "6 МПа", "Предел 1,6 МПа", False),
+        ("6 МПа", "6 МПа", "Предел 1.6 МПа", False),
+        ("1", "1", "Класс 1,5", False),
+        ("1", "1", "Класс 1.5", False),
+        ("1,6 МПа", "1,6 МПа", "Предел 1,6 МПа.", True),
+        ("1,6 МПа", "1,6  мпа", "Предел\n1,6 МПа, далее", True),
+        ("–40…+100 °С", "-40…+100 °С", "Среда: –40…+100 °С", True),
+        ("жидкости", "жидкостей", "Для ЖИДКОСТЕЙ.", True),
+        (
+            "агрессивные среды",
+            "агрессивных сред",
+            "Для неагрессивных сред, но также для агрессивных сред",
+            True,
+        ),
+    ],
+)
+def test_case_22(value, quote, description, supported) -> None:
+    # 22. Цитата ищется с границами: слева и справа не буква, не цифра и не обрывок числа
+    # Act
+    result = is_fact_supported(fact(value, quote), description)
+
+    # Assert
+    assert result is supported
+
+
+@pytest.mark.parametrize(
+    ("value", "quote", "description", "supported"),
+    [
+        ("более 0,8 Вт", "более 0,8 Вт", "Потребляет не более 0,8 Вт", False),
+        ("более 0,8 Вт", "более 0,8 Вт", "Потребляет НЕ  более 0,8 Вт", False),
+        ("демпфер", "демпфера", "Манометр без демпфера", False),
+        (
+            "без безопасного режима",
+            "безопасного режима",
+            "Работа без безопасного режима",
+            True,
+        ),
+        ("более 0,8 Вт", "более 0,8 Вт", "Потребляет более 0,8 Вт", True),
+        ("давление", "давление", "В кране давление", True),
+        ("давление", "давление", "В трубе без давление", False),
+        ("более 5 Вт", "более 5 Вт", "Сказано не. Более 5 Вт", True),
+        (
+            "более 0,8 Вт",
+            "более 0,8 Вт",
+            "Не более 0,8 Вт в покое, более 0,8 Вт в работе",
+            True,
+        ),
+    ],
+)
+def test_case_23(value, quote, description, supported) -> None:
+    # 23. «Не» или «без» сразу перед цитатой в описании и нет в значении: факт отброшен
+    # Act
+    result = is_fact_supported(fact(value, quote), description)
+
+    # Assert
+    assert result is supported
+
+
+@pytest.mark.parametrize(
+    ("value", "quote", "supported"),
+    [
+        ("демпфер", "без демпфера", False),
+        ("без демпфера", "без демпфера", True),
+        ("демпфер", "демпфера", True),
+    ],
+)
+def test_case_24(value, quote, supported) -> None:
+    # 24. «Без» внутри цитаты не теряется, как и «не»
+    # Act
+    result = is_fact_supported(fact(value, quote), f"Манометр: {quote}.")
+
+    # Assert
+    assert result is supported
+
+
+@pytest.mark.parametrize("value", ["—", "-", "…", " – ", "%", "..."])
+def test_case_25(value) -> None:
+    # 25. Значение без букв и цифр: факт отброшен
+    # Act
+    result = is_fact_supported(fact(value, "жидкостей"), PRODUCT.description)
+
+    # Assert
+    assert result is False
+
+
+def test_case_26() -> None:
+    # 26. Сборка: подтверждённый факт встаёт на место пустой строки specs, порядок прежний, второй строки нет
+    # Arrange
+    product = Product(
+        name="Манометр",
+        manufacturer=None,
+        specs={"Класс точности": None, "Диаметр": 100, "Защита": "  "},
+        description="Класс точности 1,5",
+    )
+
+    # Act
+    result = assemble_characteristics(
+        product,
+        facts=[fact("1,5", "Класс точности 1,5", name="класс  ТОЧНОСТИ")],
+        missing_names=["Класс точности", "Защита"],
+    )
+
+    # Assert
+    assert result.characteristics == (
+        Characteristic(name="Класс точности", value="1,5"),
+        Characteristic(name="Диаметр", value="100"),
+        Characteristic(name="Защита", value="данных нет"),
+    )
+    assert result.added_missing == ()
+    assert result.warnings == ()
+
+
+def test_case_27() -> None:
+    # 27. Сборка: неподтверждённый факт с именем пустой строки specs даёт warning, строка остаётся пустой
+    # Act
+    result = assemble_characteristics(
+        PRODUCT,
+        facts=[fact("IP68", "IP68", name="Защита")],
+        missing_names=[],
+    )
+
+    # Assert
+    assert result.characteristics[2] == Characteristic(
+        name="Защита", value="данных нет"
+    )
+    assert result.warnings == (
+        "Характеристика «Защита» не добавлена: значение не подтверждено описанием прибора, проверьте вручную.",
+    )
+
+
+@pytest.mark.parametrize(
+    ("source", "text"),
+    [
+        ("–40…+100 °С", "-40 и +100 °С"),
+        ("–40…+100 °С", "−40 и 100 °С"),
+        ("+100 °С", "100 °С"),
+        ("(-20 °С)", "от -20 °С"),
+        ("−0,5 МПа", "–0.5 МПа"),
+        ("–40…+100 °С", "от минус 40 до плюс 100 °С"),
+        ("Минус 40 °С", "-40 °С"),
+    ],
+)
+def test_case_28(source, text) -> None:
+    # 28. Числа со знаком в текстах: минус вплотную к числу часть числа, слово «минус» то же, плюс равен отсутствию знака
+    # Arrange
+    product = Product(
+        name="Прибор", manufacturer=None, specs={"П": source}, description=None
+    )
+
+    # Act
+    issues = find_card_issues(product, texts_with(seo_title=text))
+
+    # Assert
+    assert issues == ()
+
+
+@pytest.mark.parametrize("minus", list("-\u2010\u2011\u2012\u2013\u2014\u2015\u2212"))
+def test_case_29(minus) -> None:
+    # 29. Число без знака и с минусом это разные числа, вид минуса не важен
+    # Arrange
+    unsigned = Product(
+        name="Прибор", manufacturer=None, specs={"П": "20 °С"}, description=None
+    )
+    signed = Product(
+        name="Прибор", manufacturer=None, specs={"П": f"{minus}20 °С"}, description=None
+    )
+
+    # Act
+    extra_minus = find_card_issues(unsigned, texts_with(seo_title=f"Прибор {minus}20"))
+    lost_minus = find_card_issues(signed, texts_with(seo_title="Прибор 20"))
+    same = find_card_issues(signed, texts_with(seo_title="Прибор −20"))
+
+    # Assert
+    assert [issue.remark for issue in extra_minus] == [
+        "Число -20 в поле seo_title не встречается в данных о приборе. Убери его."
+    ]
+    assert [issue.remark for issue in lost_minus] == [
+        "Число 20 в поле seo_title не встречается в данных о приборе. Убери его."
+    ]
+    assert same == ()
+
+
+@pytest.mark.parametrize(
+    ("source", "text"),
+    [
+        ("4–20 мА", "4 и 20 мА"),
+        ("4 – 20 мА", "4 и 20 мА"),
+        ("ПД100-1Х1", "ПД 100 1 Х 1"),
+        ("DM-02", "DM 02"),
+        ("0–1,6 МПа", "0 и 1,6 МПа"),
+        ("84,0...106,7 кПа", "84 и 106,7 кПа"),
+        ("–40…–20 °С", "-40 и 20 °С"),
+        ("–40...–20 °С", "-40 и 20 °С"),
+        ("1,-5", "1 и 5"),
+        ("1.-5", "1 и 5"),
+    ],
+)
+def test_case_30(source, text) -> None:
+    # 30. Минус после цифры, буквы, разделителя или с пробелом это не знак
+    # Arrange
+    product = Product(
+        name="Прибор", manufacturer=None, specs={"П": source}, description=None
+    )
+
+    # Act
+    issues = find_card_issues(product, texts_with(seo_title=text))
+
+    # Assert
+    assert issues == ()
+
+
+@pytest.mark.parametrize(
+    ("value", "quote", "supported"),
+    [
+        ("40…100 °С", "–40…+100 °С", False),
+        ("40…100 °С", "40…+100 °С", False),
+        ("−40…100 °С", "–40…+100 °С", True),
+        ("-40, +100 °С", "–40…+100 °С", True),
+    ],
+)
+def test_case_31(value, quote, supported) -> None:
+    # 31. Числа факта сравниваются со знаком, цитата без минуса из описания не проходит
+    # Act
+    result = is_fact_supported(fact(value, quote), "Среда: –40…+100 °С.")
+
+    # Assert
+    assert result is supported

@@ -5,13 +5,13 @@ from domain.entities.card import CardDraft
 
 
 def render_markdown(draft: CardDraft) -> str:
-    texts = draft.card.texts
+    texts = draft.texts
     sections = [
         f"# {texts.seo_title}",
         texts.seo_description,
         _section(
             "Характеристики",
-            [f"{item.name}: {item.value}" for item in draft.card.characteristics],
+            [f"{item.name}: {item.value}" for item in draft.characteristics],
         ),
         _section("Поисковые запросы", texts.search_queries),
         f"## Кому подходит\n\n{texts.commercial.audience}",

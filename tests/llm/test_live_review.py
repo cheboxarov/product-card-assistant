@@ -8,7 +8,6 @@ from dataclasses import dataclass
 import pytest
 
 from application.services.card_generation.llm_schemas import (
-    CommercialOutput,
     ReviewCardOutput,
     WriteCardOutput,
 )
@@ -23,7 +22,7 @@ from domain.entities.card import CardTexts, Commercial
 from domain.interfaces.infrastructure.llm_client import LlmRequest
 from infrastructure.openrouter.client import OpenRouterClient
 from presentation.api.schemas.cards import CardRequest
-from tests.llm.conftest import CASES, MAX_CARDS_AT_ONCE, CaseRun, build_openai_client
+from tests.llm.conftest import CASES, MAX_CARDS_AT_ONCE, CaseRun, build_counted_client
 
 # Test cases:
 # 1. Подмешанные выдумки и вода найдены все
@@ -57,7 +56,7 @@ def live_reviews(live_settings: Settings) -> dict[str, ReviewRun]:
 
 async def run_all_reviews(settings: Settings) -> dict[str, ReviewRun]:
     total = CaseRun("итого")
-    client = build_openai_client(settings, total)
+    client = build_counted_client(settings, total)
     llm = OpenRouterClient(client=client, model=settings.openrouter_model)
     semaphore = asyncio.Semaphore(MAX_CARDS_AT_ONCE)
     runs = await asyncio.gather(
@@ -99,7 +98,7 @@ def draft_of(case: dict) -> WriteCardOutput:
         seo_title=card["seo_title"],
         seo_description=card["seo_description"],
         search_queries=card["search_queries"],
-        commercial=CommercialOutput(**card["commercial"]),
+        commercial=Commercial(**card["commercial"]),
     )
 
 

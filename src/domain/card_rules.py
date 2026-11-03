@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Mapping
+from dataclasses import replace
 from decimal import Decimal
 
 from domain.entities.card import (
@@ -30,11 +31,15 @@ SHORT_HEAD_WORD_MAX = 4
 SHORT_HEAD_TAIL_FREE = 1
 LONG_HEAD_MIN = 4
 LONG_HEAD_TAIL_FREE = 2
-NEGATION = "не"
+NEGATIONS = ("не", "без")
 
 DASHES = str.maketrans(dict.fromkeys("\u2010\u2011\u2012\u2013\u2014\u2015\u2212", "-"))
-NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
+NUMBER = re.compile(r"(?:(?<![\w.,])-)?\d+(?:[.,]\d+)?")
+MINUS_WORD = re.compile(r"(?<![^\W_])минус\s+(?=\d)", re.IGNORECASE)
 WORD = re.compile(r"[^\W\d_]+")
+LETTER_OR_DIGIT = re.compile(r"[^\W_]")
+BOUNDED_QUOTE = r"(?<![^\W_])(?<!\d[.,]){quote}(?![^\W_])(?![.,]\d)"
+NEGATION_BEFORE_QUOTE = re.compile(r"(?<![^\W_])(не|без) $")
 SERVICE_PATTERNS = (
     re.compile(r"json"),
     re.compile(r"входн\w*\s+(?:данн\w*|json)"),
@@ -73,6 +78,18 @@ def find_missing_input(product: Product) -> tuple[str, ...]:
     if is_empty(product.description):
         missing.append(DESCRIPTION_LABEL)
     return tuple(missing)
+
+
+def filled_spec_names(
+    product: Product,
+    characteristics: Iterable[Characteristic],
+) -> set[str]:
+    filled = {item.name for item in characteristics if item.value != NO_DATA}
+    return {
+        name
+        for name, value in product.specs.items()
+        if is_empty(value) and name in filled
+    }
 
 
 def has_too_little_data(product: Product) -> bool:
@@ -118,13 +135,16 @@ def review_issue(
 
 
 def is_fact_supported(fact: DescriptionFact, description: str) -> bool:
-    if is_empty(fact.value) or not _contains_quote(description, fact.quote):
+    value_words = _words(fact.value)
+    if LETTER_OR_DIGIT.search(fact.value) is None:
         return False
-    if not _numbers(fact.value) <= _numbers(fact.quote):
+    if not _quote_supported(description, fact.quote, value_words):
+        return False
+    quote_numbers = _numbers(fact.quote)
+    if not _numbers(fact.value) <= quote_numbers <= _numbers(description):
         return False
     quote_words = _words(fact.quote)
-    value_words = _words(fact.value)
-    if NEGATION in quote_words and NEGATION not in value_words:
+    if any(word in quote_words and word not in value_words for word in NEGATIONS):
         return False
     return all(_word_supported(word, quote_words) for word in value_words)
 
@@ -136,7 +156,14 @@ def assemble_characteristics(
     missing_names: Iterable[str],
 ) -> AssembledCharacteristics:
     characteristics = list(_characteristics_from_specs(product.specs))
-    seen = {_normalize(item.name) for item in characteristics}
+    seen = {
+        _normalize(name) for name, value in product.specs.items() if not is_empty(value)
+    }
+    empty_rows = {
+        _normalize(name): row
+        for row, (name, value) in enumerate(product.specs.items())
+        if is_empty(value)
+    }
     warnings: list[str] = []
     for fact in facts:
         key = _normalize(fact.name)
@@ -145,8 +172,13 @@ def assemble_characteristics(
         if not is_fact_supported(fact, product.description or ""):
             warnings.append(FACT_DROPPED_WARNING.format(name=fact.name))
             continue
-        characteristics.append(Characteristic(name=fact.name, value=fact.value))
+        if key in empty_rows:
+            row = empty_rows[key]
+            characteristics[row] = replace(characteristics[row], value=fact.value)
+        else:
+            characteristics.append(Characteristic(name=fact.name, value=fact.value))
         seen.add(key)
+    seen.update(empty_rows)
     added_missing: list[str] = []
     for name in missing_names:
         key = _normalize(name)
@@ -174,110 +206,79 @@ def _characteristics_from_specs(
     )
 
 
-def _title_issues(title: str) -> tuple[CardIssue, ...]:
+def _title_issues(title: str) -> Iterator[CardIssue]:
     if is_empty(title):
-        return (
-            CardIssue(
-                remark="seo_title пуст. Заполни его.",
-                warning="Заголовок пуст: напишите его вручную.",
-            ),
+        yield CardIssue(
+            remark="seo_title пуст. Заполни его.",
+            warning="Заголовок пуст: напишите его вручную.",
         )
-    if len(title) <= TITLE_MAX:
-        return ()
-    return (
-        CardIssue(
+    elif len(title) > TITLE_MAX:
+        yield CardIssue(
             remark=f"Заголовок {len(title)} символов, нужно до {TITLE_MAX}. Сократи.",
             warning=f"Заголовок длиннее {TITLE_MAX} символов ({len(title)}): сократите его перед публикацией.",
-        ),
-    )
-
-
-def _description_issues(description: str) -> tuple[CardIssue, ...]:
-    if is_empty(description):
-        return (
-            CardIssue(
-                remark="seo_description пуст. Напиши текст.",
-                warning="Описание пусто: напишите его вручную.",
-            ),
         )
-    if len(description) <= DESCRIPTION_MAX:
-        return ()
-    return (
-        CardIssue(
+
+
+def _description_issues(description: str) -> Iterator[CardIssue]:
+    if is_empty(description):
+        yield CardIssue(
+            remark="seo_description пуст. Напиши текст.",
+            warning="Описание пусто: напишите его вручную.",
+        )
+    elif len(description) > DESCRIPTION_MAX:
+        yield CardIssue(
             remark=f"seo_description {len(description)} символов, нужно до {DESCRIPTION_MAX}. Сократи без потери значений.",
             warning=f"Описание длиннее {DESCRIPTION_MAX} символов ({len(description)}): сократите его перед публикацией.",
-        ),
-    )
+        )
 
 
-def _queries_issues(queries: tuple[str, ...]) -> tuple[CardIssue, ...]:
+def _queries_issues(queries: tuple[str, ...]) -> Iterator[CardIssue]:
     filled = [_normalize(query) for query in queries if not is_empty(query)]
-    issues: list[CardIssue] = []
     if not QUERIES_MIN <= len(filled) <= QUERIES_MAX:
-        issues.append(
-            CardIssue(
-                remark=f"Запросов {len(filled)}, нужно {QUERIES_MIN}-{QUERIES_MAX}.",
-                warning=f"Поисковых запросов {len(filled)}, нужно от {QUERIES_MIN} до {QUERIES_MAX}.",
-            )
+        yield CardIssue(
+            remark=f"Запросов {len(filled)}, нужно {QUERIES_MIN}-{QUERIES_MAX}.",
+            warning=f"Поисковых запросов {len(filled)}, нужно от {QUERIES_MIN} до {QUERIES_MAX}.",
         )
     if len(set(filled)) != len(filled):
-        issues.append(
-            CardIssue(
-                remark="Есть одинаковые поисковые запросы, сделай их разными.",
-                warning="Есть одинаковые поисковые запросы: оставьте разные.",
-            )
+        yield CardIssue(
+            remark="Есть одинаковые поисковые запросы, сделай их разными.",
+            warning="Есть одинаковые поисковые запросы: оставьте разные.",
         )
-    return tuple(issues)
 
 
-def _commercial_issues(texts: CardTexts) -> tuple[CardIssue, ...]:
-    issues: list[CardIssue] = []
+def _commercial_issues(texts: CardTexts) -> Iterator[CardIssue]:
     if is_empty(texts.commercial.audience):
-        issues.append(
-            CardIssue(
-                remark="commercial.audience пуст.",
-                warning="Не заполнено, кому подходит прибор.",
-            )
+        yield CardIssue(
+            remark="commercial.audience пуст.",
+            warning="Не заполнено, кому подходит прибор.",
         )
     if is_empty(texts.commercial.tasks):
-        issues.append(
-            CardIssue(
-                remark="commercial.tasks пуст.",
-                warning="Не заполнено, какие задачи решает прибор.",
-            )
+        yield CardIssue(
+            remark="commercial.tasks пуст.",
+            warning="Не заполнено, какие задачи решает прибор.",
         )
-    return tuple(issues)
 
 
-def _number_issues(product: Product, texts: CardTexts) -> tuple[CardIssue, ...]:
+def _number_issues(product: Product, texts: CardTexts) -> Iterator[CardIssue]:
     allowed = _input_numbers(product)
-    issues: list[CardIssue] = []
     for field, label, text in _text_fields(texts):
         for number in sorted(_numbers(text) - allowed):
             shown = number.replace(".", ",")
-            issues.append(
-                CardIssue(
-                    remark=f"Число {shown} в поле {field} не встречается в данных о приборе. Убери его.",
-                    warning=f"Число {shown} в {label} не встречается в данных о приборе: проверьте его.",
-                )
+            yield CardIssue(
+                remark=f"Число {shown} в поле {field} не встречается в данных о приборе. Убери его.",
+                warning=f"Число {shown} в {label} не встречается в данных о приборе: проверьте его.",
             )
-    return tuple(issues)
 
 
-def _service_issues(description: str) -> tuple[CardIssue, ...]:
+def _service_issues(description: str) -> Iterator[CardIssue]:
     lowered = description.lower()
-    issues: list[CardIssue] = []
     for pattern in SERVICE_PATTERNS:
         match = pattern.search(lowered)
-        if match is None:
-            continue
-        issues.append(
-            CardIssue(
+        if match is not None:
+            yield CardIssue(
                 remark=f"В seo_description служебное выражение «{match.group()}». Перепиши фразу так, чтобы читатель не видел служебных слов.",
                 warning=f"В описании служебное выражение «{match.group()}»: уберите его перед публикацией.",
             )
-        )
-    return tuple(issues)
 
 
 def _text_fields(texts: CardTexts) -> tuple[tuple[str, str, str], ...]:
@@ -299,9 +300,10 @@ def _input_numbers(product: Product) -> set[str]:
 
 
 def _numbers(text: str) -> set[str]:
+    plain = unicodedata.normalize("NFKC", text).translate(DASHES)
     return {
         format(Decimal(token.replace(",", ".")).normalize(), "f")
-        for token in NUMBER.findall(unicodedata.normalize("NFKC", text))
+        for token in NUMBER.findall(MINUS_WORD.sub("-", plain))
     }
 
 
@@ -317,6 +319,23 @@ def _word_supported(word: str, quote_words: list[str]) -> bool:
     else:
         head = word[: max(LONG_HEAD_MIN, len(word) - LONG_HEAD_TAIL_FREE)]
     return any(quote_word.startswith(head) for quote_word in quote_words)
+
+
+def _quote_supported(description: str, quote: str, value_words: list[str]) -> bool:
+    needle = _normalize(quote)
+    if not needle:
+        return False
+    text = _normalize(description)
+    pattern = BOUNDED_QUOTE.format(quote=re.escape(needle))
+    return any(
+        not _negation_lost(text[: match.start()], value_words)
+        for match in re.finditer(pattern, text)
+    )
+
+
+def _negation_lost(text_before: str, value_words: list[str]) -> bool:
+    negation = NEGATION_BEFORE_QUOTE.search(text_before)
+    return negation is not None and negation.group(1) not in value_words
 
 
 def _contains_quote(text: str, quote: str) -> bool:
