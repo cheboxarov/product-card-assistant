@@ -43,6 +43,10 @@ PLUS_MINUS = re.compile(
 MINUS_WORD = re.compile(r"(?<![^\W_])минус\s+(?=\d)", re.IGNORECASE)
 WORD = re.compile(r"[^\W\d_]+")
 LETTER_OR_DIGIT = re.compile(r"[^\W_]")
+DASHES_AND_PUNCTUATION = re.compile(r"[\s\-–—−_.…?/\\*]*")
+NO_VALUE_MARKS = frozenset(
+    {"n/a", "na", "н/д", "нд", "нет данных", "данных нет", "null", "none"}
+)
 BOUNDED_QUOTE = r"(?<![^\W_])(?<!\d[.,]){quote}(?![^\W_])(?![.,]\d)"
 NEGATION_BEFORE_QUOTE = re.compile(r"(?<![^\W_])(не|без) $")
 SERVICE_PATTERNS = (
@@ -72,8 +76,11 @@ CLARIFICATION_NUMBER_WARNING = (
 
 
 def is_empty(value: str | int | float | None) -> bool:
-    return value is None or (
-        isinstance(value, str) and LETTER_OR_DIGIT.search(value) is None
+    if not isinstance(value, str):
+        return value is None
+    return (
+        DASHES_AND_PUNCTUATION.fullmatch(value) is not None
+        or value.strip().casefold() in NO_VALUE_MARKS
     )
 
 
@@ -96,13 +103,14 @@ def missing_after_assembly(
     missing: Iterable[str],
     characteristics: Iterable[Characteristic],
 ) -> tuple[str, ...]:
-    filled = {
-        _normalize(item.name) for item in characteristics if item.value != NO_DATA
-    }
+    rows = tuple(characteristics)
+    filled = {_normalize(item.name) for item in rows if item.value != NO_DATA}
+    unfilled = {_normalize(item.name) for item in rows if item.value == NO_DATA}
     return tuple(
         label
         for label in missing
-        if label != SPECS_LABEL and _normalize(label) not in filled
+        if label != SPECS_LABEL
+        and (_normalize(label) in unfilled or _normalize(label) not in filled)
     )
 
 

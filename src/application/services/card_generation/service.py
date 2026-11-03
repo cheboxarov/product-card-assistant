@@ -31,7 +31,6 @@ from domain.interfaces.infrastructure.llm_client import LlmClient, LlmRequest
 
 CARD_TEXTS_SCHEMA_NAME = "card_texts"
 CARD_REVIEW_SCHEMA_NAME = "card_review"
-REASONING_EFFORT = "low"
 GRAPH_TIMEOUT_SECONDS = 450
 NODE_MAX_ATTEMPTS = 2
 MAX_REVISIONS = 2
@@ -86,7 +85,6 @@ class CardGenerationService(CardGenerator):
                 user=user,
                 schema_name=CARD_TEXTS_SCHEMA_NAME,
                 json_schema=WriteCardOutput.model_json_schema(),
-                reasoning_effort=REASONING_EFFORT,
             )
         )
         answer = _parse_answer(WriteCardOutput, raw)
@@ -114,7 +112,6 @@ class CardGenerationService(CardGenerator):
                 user=review_card.build_message(state["product"], draft),
                 schema_name=CARD_REVIEW_SCHEMA_NAME,
                 json_schema=ReviewCardOutput.model_json_schema(),
-                reasoning_effort=REASONING_EFFORT,
             )
         )
         review = _parse_answer(ReviewCardOutput, raw)

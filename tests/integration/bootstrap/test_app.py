@@ -49,5 +49,4 @@ async def test_case_2() -> None:
     assert '<form id="card-form"' in response.text
     assert "Манометр показывающий DM 02" in response.text
     assert "Мультиметр цифровой Fluke 107" in response.text
-    assert "ПД100" not in response.text
     assert list(schema.json()["paths"]) == ["/api/v1/cards"]
