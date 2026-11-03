@@ -59,14 +59,14 @@ class CardResponse(BaseModel):
 
     @classmethod
     def from_draft(cls, draft: CardDraft) -> CardResponse:
-        texts = draft.card.texts
+        texts = draft.texts
         return cls(
             card=CardBodyResponse(
                 seo_title=texts.seo_title,
                 seo_description=texts.seo_description,
                 characteristics=[
                     CharacteristicResponse(name=item.name, value=item.value)
-                    for item in draft.card.characteristics
+                    for item in draft.characteristics
                 ],
                 search_queries=list(texts.search_queries),
                 commercial=CommercialResponse(

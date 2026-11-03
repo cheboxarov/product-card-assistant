@@ -115,7 +115,7 @@ def print_run(run: CaseRun) -> None:
     if run.draft is None:
         print(f"{head}, сбой: {run.error}")
         return
-    texts = run.draft.card.texts
+    texts = run.draft.texts
     print(
         f"{head}, заголовок {len(texts.seo_title)}, описание {len(texts.seo_description)}"
     )

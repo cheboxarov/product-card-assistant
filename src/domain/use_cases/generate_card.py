@@ -23,7 +23,7 @@ class GenerateCard:
         if has_too_little_data(product):
             raise NotEnoughDataError(missing)
         draft = await self._card_generator.generate(product)
-        filled = filled_spec_names(product, draft.card.characteristics)
+        filled = filled_spec_names(product, draft.characteristics)
         known = tuple(
             label for label in missing if label != SPECS_LABEL and label not in filled
         )

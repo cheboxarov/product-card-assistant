@@ -19,7 +19,6 @@ from domain.card_rules import (
     short_description_warnings,
 )
 from domain.entities.card import (
-    Card,
     CardDraft,
     CardIssue,
     CardTexts,
@@ -170,7 +169,8 @@ def _build_draft(
         missing_names=draft.missing_characteristics,
     )
     return CardDraft(
-        card=Card(texts=texts, characteristics=assembled.characteristics),
+        texts=texts,
+        characteristics=assembled.characteristics,
         missing_fields=assembled.added_missing,
         needs_clarification=tuple(draft.needs_clarification),
         warnings=(

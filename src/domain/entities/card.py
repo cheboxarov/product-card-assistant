@@ -24,12 +24,6 @@ class CardTexts:
 
 
 @dataclass(frozen=True, slots=True)
-class Card:
-    texts: CardTexts
-    characteristics: tuple[Characteristic, ...]
-
-
-@dataclass(frozen=True, slots=True)
 class Clarification:
     field: str
     reason: str
@@ -57,7 +51,8 @@ class CardIssue:
 
 @dataclass(frozen=True, slots=True)
 class CardDraft:
-    card: Card
-    missing_fields: tuple[str, ...] = ()
-    needs_clarification: tuple[Clarification, ...] = ()
-    warnings: tuple[str, ...] = ()
+    texts: CardTexts
+    characteristics: tuple[Characteristic, ...]
+    missing_fields: tuple[str, ...]
+    needs_clarification: tuple[Clarification, ...]
+    warnings: tuple[str, ...]

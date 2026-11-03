@@ -47,7 +47,7 @@ def draft_of(live_runs: dict[str, CaseRun], case_id: str) -> CardDraft:
 
 
 def texts_blob(draft: CardDraft) -> str:
-    texts = draft.card.texts
+    texts = draft.texts
     return "\n".join(
         (
             texts.seo_title,
@@ -60,7 +60,7 @@ def texts_blob(draft: CardDraft) -> str:
 
 
 def characteristics_lines(draft: CardDraft) -> list[str]:
-    return [f"{item.name} :: {item.value}" for item in draft.card.characteristics]
+    return [f"{item.name} :: {item.value}" for item in draft.characteristics]
 
 
 def source_blob(case_id: str) -> str:
@@ -179,7 +179,7 @@ def test_case_7(live_runs, case_id) -> None:
 def test_case_8(live_runs, case_id) -> None:
     # 8. Заголовок до 70 символов, описание до 1200
     # Act
-    texts = draft_of(live_runs, case_id).card.texts
+    texts = draft_of(live_runs, case_id).texts
 
     # Assert
     assert len(texts.seo_title) <= TITLE_MAX
@@ -190,7 +190,7 @@ def test_case_8(live_runs, case_id) -> None:
 def test_case_9(live_runs, case_id) -> None:
     # 9. Там, где данных хватает, описание от 800 символов
     # Act
-    texts = draft_of(live_runs, case_id).card.texts
+    texts = draft_of(live_runs, case_id).texts
 
     # Assert
     assert len(texts.seo_description) >= DESCRIPTION_MIN
