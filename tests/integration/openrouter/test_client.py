@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from dataclasses import replace
 
 import httpx2
 
@@ -14,7 +13,7 @@ from tests.integration.openrouter.conftest import (
 
 # Test cases:
 # 1. Клиент шлёт модель, сообщения, строгую схему и предел токенов, возвращает текст ответа
-# 2. reasoning уходит в тело, только когда reasoning_effort задан
+# 2. В теле запроса низкий уровень размышлений, иначе они съедают предел токенов
 
 
 async def test_case_1(client_for) -> None:
@@ -36,7 +35,6 @@ async def test_case_1(client_for) -> None:
     assert str(seen[0].url) == "https://openrouter.ai/api/v1/chat/completions"
     assert seen[0].headers["authorization"] == f"Bearer {TEST_API_KEY}"
     body = json.loads(seen[0].content)
-    assert "reasoning" not in body
     assert body["model"] == "test/model"
     assert body["max_tokens"] == 16000
     assert body["messages"] == [
@@ -54,7 +52,7 @@ async def test_case_1(client_for) -> None:
 
 
 async def test_case_2(client_for) -> None:
-    # 2. reasoning уходит в тело, только когда reasoning_effort задан
+    # 2. В теле запроса низкий уровень размышлений, иначе они съедают предел токенов
     # Arrange
     seen: list[httpx2.Request] = []
 
@@ -65,7 +63,7 @@ async def test_case_2(client_for) -> None:
     client = client_for(handler)
 
     # Act
-    await client.complete_json(replace(LLM_REQUEST, reasoning_effort="low"))
+    await client.complete_json(LLM_REQUEST)
 
     # Assert
     assert json.loads(seen[0].content)["reasoning"] == {"effort": "low"}

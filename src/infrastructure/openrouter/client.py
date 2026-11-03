@@ -11,6 +11,7 @@ from domain.interfaces.infrastructure.llm_client import LlmClient, LlmRequest
 
 ATTEMPT_TIMEOUT_SECONDS = 200
 MAX_OUTPUT_TOKENS = 16000
+REASONING_EFFORT = "low"
 REASON_LIMIT = 300
 TEMPORARY_STATUSES = frozenset({408, 429})
 FIRST_SERVER_ERROR_STATUS = 500
@@ -40,7 +41,7 @@ class OpenRouterClient(LlmClient):
                         },
                     },
                     max_tokens=MAX_OUTPUT_TOKENS,
-                    extra_body=_reasoning_body(request.reasoning_effort),
+                    extra_body={"reasoning": {"effort": REASONING_EFFORT}},
                 )
         except TimeoutError as exc:
             raise LlmUnavailableError(
@@ -60,12 +61,6 @@ class OpenRouterClient(LlmClient):
                 retryable=True,
             ) from exc
         return _extract_json(response)
-
-
-def _reasoning_body(effort: str | None) -> dict[str, dict[str, str]] | None:
-    if effort is None:
-        return None
-    return {"reasoning": {"effort": effort}}
 
 
 def _extract_json(response: object) -> str:
