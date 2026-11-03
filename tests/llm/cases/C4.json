@@ -1,0 +1,17 @@
+{
+ "_meta": {
+  "source": "составлено",
+  "id": "C4"
+ },
+ "device": {
+  "name": "Термометр биметаллический ТБ-63",
+  "manufacturer": "",
+  "specs": {
+   "Диапазон измерений": "0–120 °С"
+  },
+  "description": ""
+ },
+ "expect": {
+  "clar_should_be_empty": true
+ }
+}
