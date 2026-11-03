@@ -19,10 +19,12 @@ from tests.integration.openrouter.conftest import (
 # 2. HTTP 400, 401, 402, 403, 404: постоянный сбой
 # 3. HTTP 200 с error: класс сбоя по error.code, как у статусов
 # 4. HTTP 200 без choices, с пустым контентом, не JSON: негодный ответ, повторяемый, 502
-# 5. finish_reason content_filter и error: постоянный сбой, length: сбой с повтором
+# 5. finish_reason без объекта error: content_filter и error постоянный сбой, length сбой с повтором
 # 6. Таймаут и обрыв сети: временный сбой
 # 7. Попытка дольше предела: временный сбой
 # 8. В причине нет ключа и текста промпта, при 400 есть metadata.raw
+# 9. finish_reason error с choices[0].error: класс сбоя по error.code, как у статусов
+# 10. Кривой ответ при HTTP 200: негодный ответ, повторяемый
 
 
 async def failure_of(client) -> Exception:
@@ -126,7 +128,7 @@ async def test_case_4(client_for, response) -> None:
     [("length", True), ("content_filter", False), ("error", False)],
 )
 async def test_case_5(client_for, finish_reason, retryable) -> None:
-    # 5. finish_reason content_filter и error: постоянный сбой, length: сбой с повтором
+    # 5. finish_reason без объекта error: content_filter и error постоянный сбой, length сбой с повтором
     # Arrange
     client = client_for(
         lambda _: httpx2.Response(
@@ -205,3 +207,64 @@ async def test_case_8(client_for) -> None:
     assert raw in reason
     assert TEST_API_KEY not in reason
     assert PROMPT_TEXT not in reason
+
+
+@pytest.mark.parametrize(
+    ("code", "error_type", "retryable"),
+    [
+        (502, LlmUnavailableError, True),
+        (429, LlmUnavailableError, True),
+        (401, LlmFailedError, False),
+        (None, LlmFailedError, False),
+    ],
+)
+async def test_case_9(client_for, code, error_type, retryable) -> None:
+    # 9. finish_reason error с choices[0].error: класс сбоя по error.code, как у статусов
+    # Arrange
+    body = completion_body(None, finish_reason="error")
+    body["choices"][0]["error"] = {"code": code, "message": "сбой провайдера"}
+    client = client_for(lambda _: httpx2.Response(200, json=body))
+
+    # Act
+    error = await failure_of(client)
+
+    # Assert
+    assert isinstance(error, error_type)
+    assert error.retryable is retryable
+    assert "сбой провайдера" in str(error)
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx2.Response(200, json={"choices": [{"finish_reason": "stop"}]}),
+        httpx2.Response(200, json={"choices": "x"}),
+        httpx2.Response(
+            200,
+            content=b'{"choices": "\xff"}',
+            headers={"Content-Type": "application/json"},
+        ),
+        httpx2.Response(200, json={"id": "gen-1"}),
+        httpx2.Response(200, json={"choices": [1]}),
+        httpx2.Response(200, json={"choices": 5}),
+        httpx2.Response(200, json={"choices": {"a": 1}}),
+        httpx2.Response(
+            200, json={"choices": [{"finish_reason": "stop", "message": None}]}
+        ),
+        httpx2.Response(
+            200,
+            json={"choices": [{"finish_reason": "stop", "message": {"content": 5}}]},
+        ),
+    ],
+)
+async def test_case_10(client_for, response) -> None:
+    # 10. Кривой ответ при HTTP 200: негодный ответ, повторяемый
+    # Arrange
+    client = client_for(lambda _: response)
+
+    # Act
+    error = await failure_of(client)
+
+    # Assert
+    assert isinstance(error, LlmFailedError)
+    assert error.retryable is True
